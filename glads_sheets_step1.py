@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 s_per_day = 3600 * 24
+results_dir = 'step_1/'
 
 # mesh
 nx, ny = 32, 16
@@ -69,7 +70,7 @@ h0.vector()[:] = 0.05
 fig, axes = plt.subplots()
 colors = tripcolor(df.project(phi0,E), axes=axes)
 fig.colorbar(colors)
-plt.savefig("step1_phi0.jpg")
+plt.savefig(results_dir+"step1_phi0.jpg")
 
 # numerical
 dt = s_per_day*10
@@ -92,8 +93,8 @@ par = {'snes_converged_reason': None,
        'pc_factor_shift_type': 'inblocks',
        'pc_factor_mat_solver_type': 'mumps'}
 
-outfile_phi = VTKFile('step1_phi.pvd')
-outfile_h = VTKFile('step1_h.pvd')
+outfile_phi = VTKFile(results_dir+'step1_phi.pvd')
+outfile_h = VTKFile(results_dir+'step1_h.pvd')
 
 # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
 U.sub(0).assign(phi0)
