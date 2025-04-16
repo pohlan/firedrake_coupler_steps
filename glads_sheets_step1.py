@@ -3,9 +3,11 @@ from firedrake.output import VTKFile
 from firedrake.pyplot import tripcolor, triplot
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 s_per_day = 3600 * 24
 results_dir = 'step_1/'
+os.makedirs(results_dir, exist_ok=True)
 
 # mesh
 nx, ny = 32, 16
