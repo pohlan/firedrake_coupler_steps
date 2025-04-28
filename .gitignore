@@ -178,3 +178,13 @@ cython_debug/
 *.pvd
 *.vtu
 step_*/
+
+# vscode
+*.vscode
+
+# data
+*.nc
+*.zip
+SHMIP_results/
+# plots
+*.jpg
