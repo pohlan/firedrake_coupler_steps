@@ -1,5 +1,6 @@
 import firedrake as df
 from firedrake.output import VTKFile
+from firedrake.checkpointing import CheckpointFile
 from firedrake.pyplot import tripcolor, triplot
 from firedrake.__future__ import interpolate
 import numpy as np
@@ -9,11 +10,22 @@ import scipy.interpolate as itp
 
 s_per_day = 3600 * 24
 results_dir = 'step_2/'
+chk_file    = results_dir + "initial_fields_A1.h5"
 
 def Max(a, b): return (a+b+abs(a-b))/df.Constant(2)
 
+# TODO : include S in the comparison !!
+
+shmip_suit = "A1"
+shmip_m = {"A1" : 7.93e-11,
+           "A2" : 1.59e-9,
+           "A3" : 5.79e-9,
+           "A4" : 2.5e-8,
+           "A5" : 4.5e-8,
+           "A6" : 5.79e-7}
+
 # mesh
-nx, ny = 64, 32
+nx, ny = 75, 25
 Lx, Ly = 100e3, 20e3
 mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
 x, y   = df.SpatialCoordinate(mesh)
@@ -56,15 +68,26 @@ A     = df.Constant(2.5e-25)  # Pa^(-3) s^(-1)
 n     = df.Constant(3)        # -
 
 e_v   = df.Constant(0.0)      # -
-m     = df.Constant(7.93e-11) # m / s
+m     = df.Constant(shmip_m[shmip_suit]) # m / s
 
 # initial fields
 phi0 = df.Function(V_phi)
-phi0.vector()[:] = rho_i * g * H.vector()[:] * 0.5
 h0   = df.Function(V_h)
-h0.vector()[:] = 0.05
+
+if shmip_suit == "A1": # for A1 scenario (low melt), initialize with some arbitrary numbers
+    phi0.vector()[:] = rho_i * g * H.vector()[:] * 0.5
+    h0.vector()[:] = 0.05
+else: # otherwise, use steady-state result from A1 test case
+    with CheckpointFile(chk_file, 'r') as afile:
+        mesh_ = afile.load_mesh()
+        phi0_ = afile.load_function(mesh_, "phi")
+        h0_   = afile.load_function(mesh_, "h")
+        phi0.interpolate(phi0_)
+        h0.interpolate(h0_)
+        # S0   = afile.load_function(mesh, "S") # doesn't work for DGT
+# because trace elements behave weirdly, S is always initialized with an arbitrary number
 S0   = df.Function(V_S)
-S0.vector()[:] = 0.001
+S0.vector()[:] = 0.001 # * np.random.rand(len(meshx_S))
 
 # numerical
 dt = s_per_day*0.5
@@ -124,7 +147,7 @@ par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps", # ?
        "snes_rtol": 1e-5,
        "snes_atol": 1e-5,
-       "snes_max_it": 100,
+       "snes_max_it": 1000,
        "report": True,
        "snes_monitor": None,
        "error_on_nonconvergence": True}
@@ -141,9 +164,9 @@ U.sub(2).assign(S0)
 
 t = 0.0
 end = s_per_day*365*20
-dt_max = s_per_day*10
+dt_max = s_per_day*5
 dt_min = s_per_day*1e-5
-timestep_increase_fraction = 1.2
+timestep_increase_fraction = 1.1
 timestep_reduction_fraction = 0.5
 while (t <= end):
     print([t / (3600*24*365), dt / s_per_day])
@@ -161,38 +184,52 @@ while (t <= end):
     # df.solve(F_Q == 0, dQ)
     # outfile_Q.write(df.project(dQ, V_S, name="Q"))
 
-
 print(np.max(U.sub(0).vector()[:]))
 
-
-fig, axes = plt.subplots()
-colors = tripcolor(df.project(N,V_phi), axes=axes)
-fig.colorbar(colors)
-plt.savefig("N_interp.jpg")
-
+# save end result so it can serve as initial field for next simulation
+chk_file_save = results_dir + "initial_fields_"+shmip_suit+".h5"
+with CheckpointFile(chk_file, 'w') as afile:
+    afile.save_mesh(mesh)  # optional
+    afile.save_function(U.sub(0), name="phi")
+    afile.save_function(U.sub(1), name="h")
 
 # test against GlaDS-matlab SHMIP results
-fl = "SHMIP_results/mw/A1_mw.nc"
+fl = "SHMIP_results/mw/"+shmip_suit+"_mw.nc"
 ds_mw = xr.open_dataset(fl)
 x_mw = ds_mw.coords1.data[0]
 y_mw = ds_mw.coords1.data[1]
-N_mw = df.Function(V_phi)
 V_mesh = df.VectorFunctionSpace(mesh, E_phi)
 X = df.assemble(interpolate(mesh.coordinates, V_mesh))
 meshx = X.dat.data[:,0]
 meshy = X.dat.data[:,1]
-N_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy))
 
+F_mw = df.Function(V_phi)
+F_diff = df.Function(V_phi)
+for (f_mw, F_sol) in zip([ds_mw.N, ds_mw.h], [N, h]):
+    F_mw.vector()[:] = itp.griddata((x_mw,y_mw), f_mw.data[0], (meshx,meshy))
+    F_diff.interpolate(F_mw-F_sol)
+    outfile_t = VTKFile(shmip_suit+"_glads-matlab.pvd")
+    outfile_t.write(df.project(rho_i * g * H-F_mw, V_phi, name="phi"))
+    print(np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])))
+    # assert np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])) < 0.05
 
-fig, axes = plt.subplots()
-colors = tripcolor(df.project(N_mw,V_phi), axes=axes)
-fig.colorbar(colors)
-plt.savefig("N_mw.jpg")
+# save plot of steady state solution including S
+Vmesh_S = df.VectorFunctionSpace(mesh, E_S)
+X = df.assemble(interpolate(mesh.coordinates,Vmesh_S))
+meshx_S = X.dat.data[:,0]
+meshy_S = X.dat.data[:,1]
 
-fig, axes = plt.subplots()
-colors = tripcolor(df.project(N-N_mw,V_phi), axes=axes)
-fig.colorbar(colors)
-plt.savefig("N_diff.jpg")
+plt.figure()
+plt.scatter(meshx_S, meshy_S, 10, U.sub(2).vector()[:])
+plt.colorbar()
+plt.savefig("S_"+shmip_suit+".jpg")
 
+plt.figure()
+plt.scatter(meshx, meshy, 10, U.sub(0).vector()[:])
+plt.colorbar()
+plt.savefig("phi_"+shmip_suit+".jpg")
 
-# print(np.max(np.abs(N.vector()[:]-N_mw.vector()[:])))
+plt.figure()
+plt.scatter(meshx, meshy, 20, U.sub(1).vector()[:])
+plt.colorbar()
+plt.savefig("h_"+shmip_suit+".jpg")
