@@ -16,9 +16,15 @@
 - DGT elements for channels
 - adjusting time stepping, sort of working now although not quite the result of GlaDS-matlab yet; comparison to GlaDS-matlab so far only based on maximum `phi` which should be around 4.0e6 for A1
 
-### Step 3: only GlaDS, sheets + channels, continued
+### Step 3: only GlaDS, sheets + channels, continued, only A1
 
 - interpolating GlaDS-matlab result onto element dofs and compare
 - initializing with A1 steady state for higher melt
 - switching to CG1 for `h`, gives better agreement with GlaDS matlab; increasing the resolution above `nx, ny = 75, 25` doesn't really improve the agreement further (GlaDS-matlab roughly 100x30 dofs)
 - for larger `dt_max` or `timestep_increase_fraction`, may need to run for longer to reach steady state
+- works for A1 now as is, but not necessarily for the other cases
+
+### Step 4: same as before but with GLADS class, different structure
+
+- putting stuff in different files so that main file is much shorter and concentrates on numerical stuff to tweak to make different test cases run (`m`, `dt`, `dt_max`, initial conditions etc..)
+- everything else exactly the same as before
