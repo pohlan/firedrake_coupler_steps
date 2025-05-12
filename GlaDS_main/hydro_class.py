@@ -1,6 +1,7 @@
 import firedrake as df
 from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
+import numpy as np
 
 def Max(a, b): return (a+b+abs(a-b))/df.Constant(2)
 
@@ -47,9 +48,9 @@ class GLADS(object):
 
         # bed and ice surface
         x, y = df.SpatialCoordinate(self.mesh)
-        B = df.Function(self.V_phi)
+        B = self.B = df.Function(self.V_phi)
         B.vector()[:] = 0.0
-        H = df.Function(self.V_phi)
+        H = self.H = df.Function(self.V_phi)
         H.interpolate(6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1)
 
         # trial and test functions
@@ -150,6 +151,9 @@ class GLADS(object):
     def set_initial_h(self,h0_):
         self.h0.interpolate(h0_)
         self.U.sub(1).assign(self.h0)
-    def set_initial_phi(self,S0_):
-        self.S0.interpolate(S0_)
+    def set_initial_S(self,S0_):
+        if type(S0_) == np.ndarray:
+            self.S0.vector()[:] = S0_
+        else:
+            self.S0.interpolate(S0_)
         self.U.sub(2).assign(self.S0)

@@ -2,6 +2,7 @@ import firedrake as df
 from GlaDS_main.hydro_class import GLADS
 import GlaDS_main.helpers as hlp
 from firedrake.checkpointing import CheckpointFile
+import numpy as np
 
 s_per_day = 3600 * 24
 results_dir = 'step_4/'
@@ -12,7 +13,7 @@ Lx, Ly = 100e3, 20e3
 mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
 
 # shmip
-shmip_suit = "A1"
+shmip_suit = "A6"
 shmip_m = {"A1" : 7.93e-11,
            "A2" : 1.59e-9,
            "A3" : 5.79e-9,
@@ -36,7 +37,7 @@ hydro.build_variables(m, dt0)
 #     mesh_ = afile.load_mesh()
 #     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
 #     hydro.set_initial_h(afile.load_function(mesh_, "h"))
-# hydro.set_initial_S(10 * np.random.rand(len())) TODO
+hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
 
 # solver options
 par = {"snes_type": "vinewtonrsls",
@@ -50,7 +51,7 @@ par = {"snes_type": "vinewtonrsls",
 
 # time stepping and solve
 t     = 0.0
-t_end = s_per_day*365*20
+t_end = s_per_day*365*100
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
     print([t / (3600*24*365), dt / s_per_day])

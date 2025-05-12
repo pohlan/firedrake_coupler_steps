@@ -5,6 +5,7 @@ import xarray as xr
 import scipy.interpolate as itp
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 def scatterplt_fields(hydro, dest_id):
     for (field, name, element) in zip(hydro.U.subfunctions, ["phi", "h", "S"], hydro.E_V.sub_elements): # [hydro.E_phi, hydro.E_h, hydro.E_S]):
@@ -37,6 +38,9 @@ def diff_to_glads_matlab(hydro, file):
         print(np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])))
         # assert np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])) < 0.05
 
-        # also save GlaDS-matlab as pvd to visualize in paraview
-        # outfile_t = VTKFile(shmip_suit+"_glads-matlab.pvd")
-        # outfile_t.write(df.project(rho_i * g * H-F_mw, V_phi, name="phi"))
+    # # also save GlaDS-matlab as pvd to visualize in paraview
+    # shmip_suit = os.path.basename(file)[0:2]
+    # F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy))
+    # VTKFile(shmip_suit+"_glads-matlab_phi.pvd").write(df.project(1000 * 9.8 * hydro.H-F_mw, hydro.V_phi, name="phi"))
+    # F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.h.data[0], (meshx,meshy))
+    # VTKFile(shmip_suit+"_glads-matlab_h.pvd").write(df.project(F_mw, hydro.V_phi, name="h"))
