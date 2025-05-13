@@ -19,7 +19,7 @@ class GLADS(object):
 
         # create output files
         self.results_dir = results_dir
-        self.outfile_phi = VTKFile(results_dir+'step4_phi.pvd')
+        self.outfile_phi = VTKFile(results_dir+'step4_phi.pvd')  # TODO: change the step4
         self.outfile_h   = VTKFile(results_dir+'step4_h.pvd')
         # self.outfile_S   = VTKFile(results_dir+'step2_S.pvd')
         # self.outfile_Q   = VTKFile(results_dir+'step2_Q.pvd')
@@ -46,12 +46,9 @@ class GLADS(object):
         e_v   = df.Constant(0.0)      # -
         m     = df.Constant(m_) # m / s
 
-        # bed and ice surface
-        x, y = df.SpatialCoordinate(self.mesh)
+        # initialize bed and ice surface
         B = self.B = df.Function(self.V_phi)
-        B.vector()[:] = 0.0
         H = self.H = df.Function(self.V_phi)
-        H.interpolate(6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1)
 
         # trial and test functions
         U  = self.U = df.Function(self.V)
@@ -124,6 +121,11 @@ class GLADS(object):
 
         # boundary conditions
         self.bcs = [df.DirichletBC(self.V.sub(0), df.Constant(0.0), 1)] # id =1 --> left boundary
+
+    def set_geometry(self, surface, bed):
+        x, y = df.SpatialCoordinate(self.mesh)
+        self.H.interpolate(Max(surface(x,y)-bed(x,y),0))
+        self.B.interpolate(bed(x,y))
 
     def set_timestep(self, dt_):
         self.dt.assign(dt_)

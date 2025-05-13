@@ -1,11 +1,29 @@
 import firedrake as df
 from firedrake.__future__ import interpolate
 from firedrake.output import VTKFile
+from firedrake.pyplot import tripcolor, triplot
 import xarray as xr
 import scipy.interpolate as itp
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+
+def plot_geometry(hydro):
+    # bed
+    fig, axes = plt.subplots()
+    cl = tripcolor(hydro.B, axes=axes)
+    fig.colorbar(cl)
+    plt.savefig("B.jpg")
+    # thickness
+    fig, axes = plt.subplots()
+    cl = tripcolor(hydro.H, axes=axes)
+    fig.colorbar(cl)
+    plt.savefig("H.jpg")
+    # mesh
+    fig, axes = plt.subplots()
+    colors = triplot(hydro.mesh, axes=axes)
+    axes.legend()
+    plt.savefig("mesh.jpg")
 
 def scatterplt_fields(hydro, dest_id):
     for (field, name, element) in zip(hydro.U.subfunctions, ["phi", "h", "S"], hydro.E_V.sub_elements): # [hydro.E_phi, hydro.E_h, hydro.E_S]):
