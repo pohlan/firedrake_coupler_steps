@@ -24,9 +24,13 @@
 - for larger `dt_max` or `timestep_increase_fraction`, may need to run for longer to reach steady state
 - works for A1 now as is, but not necessarily for the other cases
 
-### Step 4: same as before but with GLADS class, different structure; made it work for A1-A6
+### Step 4: same as before but with GLADS class; made it work for A1-A6
 
 - putting stuff in different files so that main file is much shorter and concentrates on numerical stuff to tweak to make different test cases run (`m`, `dt`, `dt_max`, initial conditions etc..)
 - everything else exactly the same as before
 - works well for A1-A6, just need to make sure it runs for long enough to reach steady state where the solver converges in one step every time (for larger `dt` it may need to be run for longer)
 - Works for A1-A6 when initialized with an arbitrary field, no need to save a previous steady state. For A6 it works better when the channel cross-section `S` is initialized being in the order of 10, for the others 0.001 is ok. Randomizing the `S` initialization helps for the channels to form in the middle and not just on the lateral margins of the glacier/ice sheet.
+
+![Screenshot from 2025-05-12 15-56-37](https://github.com/user-attachments/assets/f1d696e9-0fde-4f0f-b991-8d832af086ac)
+Left: 🔥🐉, right: GlaDS-matlab
+
