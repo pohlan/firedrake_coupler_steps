@@ -51,14 +51,14 @@ def diff_to_glads_matlab(hydro, file):
     F_mw = df.Function(hydro.V_phi)
     F_diff = df.Function(hydro.V_phi)
     for (f_mw, F_sol) in zip([ds_mw.N, ds_mw.h], [hydro.N, hydro.U.sub(1)]):
-        F_mw.vector()[:] = itp.griddata((x_mw,y_mw), f_mw.data[0], (meshx,meshy))
+        F_mw.vector()[:] = itp.griddata((x_mw,y_mw), f_mw.data[0], (meshx,meshy), method="nearest")
         F_diff.interpolate(F_mw-F_sol)
         print(np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])))
         # assert np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])) < 0.05
 
-    # # also save GlaDS-matlab as pvd to visualize in paraview
-    # shmip_suit = os.path.basename(file)[0:2]
-    # F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy))
-    # VTKFile(shmip_suit+"_glads-matlab_phi.pvd").write(df.project(1000 * 9.8 * hydro.H-F_mw, hydro.V_phi, name="phi"))
-    # F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.h.data[0], (meshx,meshy))
-    # VTKFile(shmip_suit+"_glads-matlab_h.pvd").write(df.project(F_mw, hydro.V_phi, name="h"))
+    # also save GlaDS-matlab as pvd to visualize in paraview
+    shmip_suit = os.path.basename(file)[0:2]
+    F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy), method="nearest") # the default method, linear, gives nan values at the edges of the domain
+    VTKFile(shmip_suit+"_glads-matlab_phi.pvd").write(df.project(910*9.8*hydro.H - F_mw + 1000*9.8*hydro.B, hydro.V_phi, name="phi"))
+    F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.h.data[0], (meshx,meshy), method="nearest")
+    VTKFile(shmip_suit+"_glads-matlab_h.pvd").write(df.project(F_mw, hydro.V_phi, name="h"))

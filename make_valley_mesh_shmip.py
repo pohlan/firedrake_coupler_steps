@@ -17,22 +17,25 @@ def outline(x):
     return ginv( (surface(x,0)-f(x,0.05))/(h(x,0.05)+1e-15) )
 
 # evaluate on a number of points
-x = np.arange(0, 6e3, 250)
+x = np.concat([np.arange(0,450,150), np.arange(450, 6e3, 250)])
 y = outline(x)
-xpts = np.concat([x,np.flip(x)])
-ypts = np.concat([y,np.flip(-y)])
+xpts = np.concat([x,np.flip(x), [0]])
+ypts = np.concat([y,np.flip(-y), [0]])
+# xpts = np.concat([x, [6e3], np.flip(x), [0.]])
+# ypts = np.concat([y, [0], np.flip(-y), [0.]])
+# solver doesn't like the point 6e3, 0 for some reason..
 
 # generate mesh with gmsh
 gmsh.initialize()
 geometry = gmsh.model.geo
 
-lc  = 250
+lc  = 220
 points = [geometry.add_point(xi,yi,0,lc) for (xi,yi) in zip(xpts,ypts)]
 lines  = [geometry.add_line(pt1, pt2) for (pt1,pt2) in zip(points, np.concat([points[1:],[points[0]]])) ]
 
 face  = geometry.add_curve_loop(lines)
 plane = geometry.add_plane_surface([face])
-physical_line = geometry.add_physical_group(1, [lines[-1]]) # bc edge
+physical_line = geometry.add_physical_group(1, [lines[-1],lines[-2]]) # bc edge
 physical_surface = geometry.add_physical_group(2, [plane])
 
 geometry.synchronize()
@@ -49,3 +52,11 @@ fig, axes = plt.subplots()
 triplot(mesh, axes=axes)
 axes.legend()
 plt.savefig("valley_mesh.jpg")
+
+# print how many dofs
+V_phi = df.FunctionSpace(mesh, "CG", 1)
+V_h   = df.FunctionSpace(mesh, "CG", 1)
+V_S   = df.FunctionSpace(mesh, "DGT", 0)
+print(V_phi.dof_count)
+print(V_h.dof_count)
+print(V_S.dof_count)

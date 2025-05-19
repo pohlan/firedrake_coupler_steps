@@ -7,16 +7,18 @@ s_per_day = 3600 * 24
 results_dir = 'step_5/'
 
 # shmip
-shmip_suit = "E1"
+shmip_suit = "E4"
 m = 1.158e-6 # E suit
 
 # mesh
 mesh = df.Mesh("valley.msh")
 
 # time stepping
-dt0 = s_per_day*0.1
-dt_max = s_per_day*5
-timestep_increase_fraction = 1.05
+dt0 = s_per_day*0.001
+dt_max = s_per_day*15
+dt_min = s_per_day*1e-5
+timestep_increase_fraction = 1.01
+timestep_reduction_fraction = 0.5
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
@@ -65,8 +67,8 @@ hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
 par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
-       "snes_atol": 1e-5,
-       "snes_max_it": 1000,
+       "snes_atol": 1e-3,
+       "snes_max_it": 100,
        "report": True,
        "snes_monitor": None,
        "error_on_nonconvergence": True}
@@ -77,15 +79,24 @@ t_end = s_per_day*365*100
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
     print([t / (3600*24*365), dt / s_per_day])
-    df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
-    hydro.update_time_variables()
-    t += dt
-    hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
-    hydro.write_variables_pvd(t)
+    if dt < dt_min:
+        print("Minimal time step reached. Simulation failed.")
+        break
+    try:
+        df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
+        hydro.update_time_variables()
+        t += dt
+        hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
+        hydro.write_variables_pvd(t)
 
-    # Doug's trick to save Q
-    # df.solve(F_Q == 0, dQ)
-    # outfile_Q.write(df.project(dQ, V_S, name="Q"))
+        # Doug's trick to save Q
+        # df.solve(F_Q == 0, dQ)
+        # outfile_Q.write(df.project(dQ, V_S, name="Q"))
+
+    except df.exceptions.ConvergenceError:
+        # If solver fails, try again with a smaller time step
+        hydro.dt.assign(dt*timestep_reduction_fraction)
+        print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # save end result such that it can serve as initial field for another simulation
 # if shmip_suit == "A1":
