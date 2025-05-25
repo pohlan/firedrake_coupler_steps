@@ -20,24 +20,6 @@ dt_min = s_per_day*1e-5
 timestep_increase_fraction = 1.01
 timestep_reduction_fraction = 0.5
 
-# hydro object
-hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0)
-
-# # A suites
-# def surface(x,y):
-#     6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
-# def bed(x,y):
-#     0
-#
-# hydro.set_geometry(surface, bed)
-# shmip_m = {"A1" : 7.93e-11,
-#            "A2" : 1.59e-9,
-#            "A3" : 5.79e-9,
-#            "A4" : 2.5e-8,
-#            "A5" : 4.5e-8,
-#            "A6" : 5.79e-7}
-# m = shmip_m[shmip_suit]
 
 # E suites geometry
 para_bench = 0.05
@@ -58,17 +40,22 @@ def h(x,para):
 def bed(x,y):
     return f(x,para) + g(y) * h(x,para)
 
-hydro.set_geometry(surface, bed)
+# hydro object
+hydro = GLADS(mesh, results_dir)
+hydro.build_variables(m, dt0, surface, bed)
 hlp.plot_geometry(hydro)
 
-hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
+x, y = df.SpatialCoordinate(hydro.mesh)
+hydro.set_initial_phi(0.0) # default doesn't work here
+# hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
+hydro.set_initial_S(20*(1-x/6e3))  # 20 * .. worked for E1-E3
 
 # solver options
 par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
        "snes_atol": 1e-3,
-       "snes_max_it": 100,
+       "snes_max_it": 1000,
        "report": True,
        "snes_monitor": None,
        "error_on_nonconvergence": True}
@@ -100,8 +87,9 @@ while (t <= t_end):
 
 # save end result such that it can serve as initial field for another simulation
 # if shmip_suit == "A1":
-# chk_file_save = results_dir + "initial_fields_"+shmip_suit+".h5"
-# hydro.save_end_state(chk_file_save)
+chk_file_save = results_dir + "initial_fields_"+shmip_suit+".h5"
+csv_file_save = results_dir + "initial_S_"+shmip_suit+".csv"
+hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
 hlp.scatterplt_fields(hydro, shmip_suit)

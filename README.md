@@ -29,8 +29,13 @@
 - putting stuff in different files so that main file is much shorter and concentrates on numerical stuff to tweak to make different test cases run (`m`, `dt`, `dt_max`, initial conditions etc..)
 - everything else exactly the same as before
 - works well for A1-A6, just need to make sure it runs for long enough to reach steady state where the solver converges in one step every time (for larger `dt` it may need to be run for longer)
-- Works for A1-A6 when initialized with an arbitrary field, no need to save a previous steady state. For A6 it works better when the channel cross-section `S` is initialized being in the order of 10, for the others 0.001 is ok. Randomizing the `S` initialization helps for the channels to form in the middle and not just on the lateral margins of the glacier/ice sheet.
+- Works for A1-A6 when initialized with an arbitrary field, no need to save a previous steady state. For A6 it works better when the channel cross-section `S` is initialized being in the order of 10 and with a linear dependence on the `x` coordinate; for the others 0.001 is ok.
 
 ![Screenshot from 2025-05-12 15-56-37](https://github.com/user-attachments/assets/f1d696e9-0fde-4f0f-b991-8d832af086ac)
 Left: 🔥🐉, right: GlaDS-matlab
 
+
+### Step 5: implementing the E test cases (valley geometry)
+
+- mesh now generated with `make_valley_mesh_shmip.py` using `gmsh` rather than in firedrake directly; taking the outline function y(x) from the shmip instruction website and generating points along it
+- working for E1-E4 at the moment; time step has to reduce a couple times but recovers; not for E5, it cannot get above ~0.06 which takes ages go reach steady state; changing the mesh slightly or the initial conditions has not lead to success yet

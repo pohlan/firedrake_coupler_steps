@@ -2,6 +2,7 @@ import firedrake as df
 from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
 import numpy as np
+import pandas as pd
 
 def Max(a, b): return (a+b+abs(a-b))/df.Constant(2)
 
@@ -24,7 +25,7 @@ class GLADS(object):
         # self.outfile_S   = VTKFile(results_dir+'step2_S.pvd')
         # self.outfile_Q   = VTKFile(results_dir+'step2_Q.pvd')
 
-    def build_variables(self, m_, dt_): # shmip_m[shmip_suit]
+    def build_variables(self, m_, dt_, surface, bed): # shmip_m[shmip_suit]
         # constants
         rho_i = df.Constant(910)      # kg / m^3
         rho_w = df.Constant(1000)     # kg / m^3
@@ -47,8 +48,11 @@ class GLADS(object):
         m     = df.Constant(m_) # m / s
 
         # initialize bed and ice surface
+        x, y = df.SpatialCoordinate(self.mesh)
         B = self.B = df.Function(self.V_phi)
+        self.B.interpolate(bed(x,y))
         H = self.H = df.Function(self.V_phi)
+        self.H.interpolate(Max(surface(x,y)-bed(x,y),0))
 
         # trial and test functions
         U  = self.U = df.Function(self.V)
@@ -122,11 +126,6 @@ class GLADS(object):
         # boundary conditions
         self.bcs = [df.DirichletBC(self.V.sub(0), df.Constant(0.0), 1)] # id =1 --> left boundary
 
-    def set_geometry(self, surface, bed):
-        x, y = df.SpatialCoordinate(self.mesh)
-        self.H.interpolate(Max(surface(x,y)-bed(x,y),0))
-        self.B.interpolate(bed(x,y))
-
     def set_timestep(self, dt_):
         self.dt.assign(dt_)
 
@@ -139,11 +138,13 @@ class GLADS(object):
         self.outfile_phi.write(df.project(self.U.sub(0), self.V_phi, name="phi"))
         self.outfile_h.write(df.project(self.U.sub(1), self.V_h, name="h"))
 
-    def save_end_state(self, chk_file):
+    def save_end_state(self, chk_file, csv_file):
         with CheckpointFile(chk_file, 'w') as afile:
             afile.save_mesh(self.mesh)  # optional
             afile.save_function(self.U.sub(0), name="phi")
             afile.save_function(self.U.sub(1), name="h")
+        df_S = pd.DataFrame({'S': self.U.sub(2).vector()[:]})
+        df_S.to_csv(csv_file, index=False)
 
     # for choosing different initial values than the default
     # has to be given as an expression not an array

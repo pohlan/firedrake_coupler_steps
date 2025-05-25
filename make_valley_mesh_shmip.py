@@ -17,13 +17,13 @@ def outline(x):
     return ginv( (surface(x,0)-f(x,0.05))/(h(x,0.05)+1e-15) )
 
 # evaluate on a number of points
-x = np.concat([np.arange(0,450,150), np.arange(450, 6e3, 250)])
+x = np.concatenate([np.arange(0,450,150), np.arange(450, 6e3, 250)])
 y = outline(x)
-xpts = np.concat([x,np.flip(x), [0]])
-ypts = np.concat([y,np.flip(-y), [0]])
-# xpts = np.concat([x, [6e3], np.flip(x), [0.]])
-# ypts = np.concat([y, [0], np.flip(-y), [0.]])
-# solver doesn't like the point 6e3, 0 for some reason..
+xpts = np.concatenate([x,np.flip(x), [0]])
+ypts = np.concatenate([y,np.flip(-y), [0]])
+# xpts = np.concatenate([x, [6e3], np.flip(x), [0.]])
+# ypts = np.concatenate([y, [0], np.flip(-y), [0.]])
+# solver doesn't like the point 6e3, 0 for some reason, maybe because H=0 there.
 
 # generate mesh with gmsh
 gmsh.initialize()
@@ -31,7 +31,7 @@ geometry = gmsh.model.geo
 
 lc  = 220
 points = [geometry.add_point(xi,yi,0,lc) for (xi,yi) in zip(xpts,ypts)]
-lines  = [geometry.add_line(pt1, pt2) for (pt1,pt2) in zip(points, np.concat([points[1:],[points[0]]])) ]
+lines  = [geometry.add_line(pt1, pt2) for (pt1,pt2) in zip(points, np.concatenate([points[1:],[points[0]]])) ]
 
 face  = geometry.add_curve_loop(lines)
 plane = geometry.add_plane_surface([face])
@@ -51,6 +51,7 @@ mesh = df.Mesh("valley.msh")
 fig, axes = plt.subplots()
 triplot(mesh, axes=axes)
 axes.legend()
+axes.axis("equal")
 plt.savefig("valley_mesh.jpg")
 
 # print how many dofs
