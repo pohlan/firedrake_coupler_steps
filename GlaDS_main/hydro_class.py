@@ -20,12 +20,12 @@ class GLADS(object):
 
         # create output files
         self.results_dir = results_dir
-        self.outfile_phi = VTKFile(results_dir+'step4_phi.pvd')  # TODO: change the step4
-        self.outfile_h   = VTKFile(results_dir+'step4_h.pvd')
+        self.outfile_phi = VTKFile(results_dir+results_dir[:-1]+'_phi.pvd')
+        self.outfile_h   = VTKFile(results_dir+results_dir[:-1]+'_h.pvd')
         # self.outfile_S   = VTKFile(results_dir+'step2_S.pvd')
         # self.outfile_Q   = VTKFile(results_dir+'step2_Q.pvd')
 
-    def build_variables(self, m_, dt_, surface, bed): # shmip_m[shmip_suit]
+    def build_variables(self, m_, dt_, surface, bed, e_v_=0.0): # shmip_m[shmip_suit]
         # constants
         rho_i = df.Constant(910)      # kg / m^3
         rho_w = df.Constant(1000)     # kg / m^3
@@ -44,7 +44,7 @@ class GLADS(object):
         A     = df.Constant(2.5e-25)  # Pa^(-3) s^(-1)
         n     = df.Constant(3)        # -
 
-        e_v   = df.Constant(0.0)      # -
+        e_v   = df.Constant(e_v_)     # -
         m     = df.Constant(m_) # m / s
 
         # initialize bed and ice surface

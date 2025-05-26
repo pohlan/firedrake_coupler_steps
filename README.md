@@ -35,7 +35,7 @@
 Left: 🔥🐉, right: GlaDS-matlab
 
 
-### Step 5: implementing the E test cases (valley geometry)
+### Step 5: implementing the E test cases (valley geometry)  # TO FIX
 
 - mesh now generated with `make_valley_mesh_shmip.py` using `gmsh` rather than in firedrake directly; taking the outline function y(x) from the shmip instruction website and generating points along it
 - working for E1-E4 at the moment; time step has to reduce a couple times but recovers; not for E5, it cannot get above ~0.06 which takes ages go reach steady state; changing the mesh slightly or the initial conditions has not lead to success yet

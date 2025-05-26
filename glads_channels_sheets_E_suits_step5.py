@@ -7,15 +7,16 @@ s_per_day = 3600 * 24
 results_dir = 'step_5/'
 
 # shmip
-shmip_suit = "E4"
-m = 1.158e-6 # E suit
+shmip_suit = "E5"
+m          = 1.158e-6
+e_v        = 5e-3
 
 # mesh
 mesh = df.Mesh("valley.msh")
 
 # time stepping
-dt0 = s_per_day*0.001
-dt_max = s_per_day*15
+dt0 = s_per_day*0.01
+dt_max = s_per_day*45
 dt_min = s_per_day*1e-5
 timestep_increase_fraction = 1.01
 timestep_reduction_fraction = 0.5
@@ -42,13 +43,16 @@ def bed(x,y):
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0, surface, bed)
+hydro.build_variables(m, dt0, surface, bed, e_v)
 hlp.plot_geometry(hydro)
 
 x, y = df.SpatialCoordinate(hydro.mesh)
 hydro.set_initial_phi(0.0) # default doesn't work here
 # hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
-hydro.set_initial_S(20*(1-x/6e3))  # 20 * .. worked for E1-E3
+def S_init(x):
+    return 20 * (1-x/6e3) * np.random.rand()
+hydro.set_initial_S(S_init(x))
+# hydro.set_initial_S(20*(1-x/6e3))  # 20 * .. worked for E1-E3
 
 # solver options
 par = {"snes_type": "vinewtonrsls",
