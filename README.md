@@ -39,3 +39,9 @@ Left: 🔥🐉, right: GlaDS-matlab
 
 - mesh now generated with `make_valley_mesh_shmip.py` using `gmsh` rather than in firedrake directly; taking the outline function y(x) from the shmip instruction website and generating points along it
 - working for E1-E4 at the moment; time step has to reduce a couple times but recovers; not for E5, it cannot get above ~0.06 which takes ages go reach steady state; changing the mesh slightly or the initial conditions has not lead to success yet
+
+
+### Step 6: D test cases (ice sheet geometry with seasonal melt input)
+
+- working well for D1-D5; needed some trial and error to figure out which time steps are reasonal, here used an ad hoc linear function depending on `m`, always in the range of 5h to 15h.
+- for D5, channels nicely form and close seasonally

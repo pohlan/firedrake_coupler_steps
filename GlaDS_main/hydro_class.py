@@ -45,7 +45,8 @@ class GLADS(object):
         n     = df.Constant(3)        # -
 
         e_v   = df.Constant(e_v_)     # -
-        m     = df.Constant(m_) # m / s
+        m     = self.m = df.Function(self.V_phi) # m / s
+        m.interpolate(m_)
 
         # initialize bed and ice surface
         x, y = df.SpatialCoordinate(self.mesh)
