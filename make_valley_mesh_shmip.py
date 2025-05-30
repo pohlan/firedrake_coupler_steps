@@ -17,25 +17,27 @@ def outline(x):
     return ginv( (surface(x,0)-f(x,0.05))/(h(x,0.05)+1e-15) )
 
 # evaluate on a number of points
-x = np.concatenate([np.arange(0,450,150), np.arange(450, 6e3, 250)])
+x = np.concatenate([np.arange(0,150,80), np.arange(150, 5.8e3, 350), np.arange(5.8e3, 6e3, 80)])
 y = outline(x)
+y[0] = 30
 xpts = np.concatenate([x,np.flip(x), [0]])
 ypts = np.concatenate([y,np.flip(-y), [0]])
 # xpts = np.concatenate([x, [6e3], np.flip(x), [0.]])
 # ypts = np.concatenate([y, [0], np.flip(-y), [0.]])
-# solver doesn't like the point 6e3, 0 for some reason, maybe because H=0 there.
+# solver doesn't like the point 6e3, 0 for some reason, even when H is forced to be >= 10
 
 # generate mesh with gmsh
 gmsh.initialize()
 geometry = gmsh.model.geo
 
-lc  = 220
+lc  = 450
 points = [geometry.add_point(xi,yi,0,lc) for (xi,yi) in zip(xpts,ypts)]
 lines  = [geometry.add_line(pt1, pt2) for (pt1,pt2) in zip(points, np.concatenate([points[1:],[points[0]]])) ]
 
 face  = geometry.add_curve_loop(lines)
 plane = geometry.add_plane_surface([face])
 physical_line = geometry.add_physical_group(1, [lines[-1],lines[-2]]) # bc edge
+physical_line = geometry.add_physical_group(1, lines[0:-2]) # non-bc edge
 physical_surface = geometry.add_physical_group(2, [plane])
 
 geometry.synchronize()

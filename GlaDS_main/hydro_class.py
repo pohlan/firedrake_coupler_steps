@@ -4,8 +4,6 @@ from firedrake.checkpointing import CheckpointFile
 import numpy as np
 import pandas as pd
 
-def Max(a, b): return (a+b+abs(a-b))/df.Constant(2)
-
 class GLADS(object):
     def __init__(self,mesh, results_dir):
         self.mesh  = mesh
@@ -53,7 +51,7 @@ class GLADS(object):
         B = self.B = df.Function(self.V_phi)
         self.B.interpolate(bed(x,y))
         H = self.H = df.Function(self.V_phi)
-        self.H.interpolate(Max(surface(x,y)-bed(x,y),0))
+        self.H.interpolate(df.max_value(surface(x,y)-bed(x,y),0))
 
         # trial and test functions
         U  = self.U = df.Function(self.V)
@@ -62,7 +60,7 @@ class GLADS(object):
 
         # initial fields, default
         phi0 = self.phi0 = df.Function(self.V_phi)
-        phi0.vector()[:] = rho_i * g * H.vector()[:] * 0.5
+        phi0.interpolate(rho_i * g * H + rho_w * g * B)
         h0   = self.h0   = df.Function(self.V_h)
         h0.vector()[:]   = 0.5*h_r
         S0   = self.S0   = df.Function(self.V_S)
@@ -96,27 +94,31 @@ class GLADS(object):
         dPds = df.dot(s,df.grad(P_w))
 
         # Edgewise flux
-        Q = -k_c*Max(S,1e-15)**alpha*Max(dphids**2, 1e-15)**(beta/2.-1)*dphids
-        q_c = -k_s*Max(h,1e-15)**alpha*Max(dphids**2, 1e-15)**(beta/2.-1)*dphids
+        Q = -k_c*df.max_value(S,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
+        q_c = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
 
         # Sheet flux
-        q   = -k_s*(h+1e-15)**alpha*(df.dot(df.grad(phi),df.grad(phi))+1e-15)**(beta/2.-1)*df.grad(phi)
+        q   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
 
         # Channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
-        f   = Max(Max(df.sign(S),0), Max(df.sign(q_c*dPds),0))
+        Sthresh = 5e-5 # TODO: what are these thresholds?
+        f_S = 1 - df.max_value(0.0, df.min_value(1.0, S/1e-2))
+        f_P = 1 - df.max_value(0.0, df.min_value(1.0, q_c*dPds/Sthresh))
+        f   = 1 - f_S*f_P
         Pi = -ct*cw*rho_w*(Q+f*l_c*q_c)*dPds
+        # Pi = 0 is no problem; f=1-f_P works as well; f=1-f_S doesn't if the threshold is too low
 
         # opening and closure for sheets and channels
-        O   = Max(u_b*(h_r - h)/l_r,0)
-        C   = A*h*abs(N)**(n-1)*Max(N,1000)
+        O   = df.max_value(u_b*(h_r - h)/l_r,0)
+        C   = A*h*abs(N)**(n-1)*N
         O_c = (Chi-Pi) / (rho_i*L)
-        C_c = A*S*abs(N)**(n-1)*Max(N,1000)
+        C_c = A*S*abs(N)**(n-1)*N
 
         R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q) + xsi * (O-C-m) ) * df.dx
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx
-        R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
+        R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + ((S-S0)/dt - O_c + C_c)*w * df.ds(1) + S*w*df.ds(2) # last term is to enforse S = 0 at boundary edges
         self.F  = R_phi_h + R_phi_S + R_h + R_S
 
         # trick for saving Q

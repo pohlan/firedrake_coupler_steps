@@ -1,7 +1,10 @@
 import firedrake as df
+from firedrake.output import VTKFile
+from firedrake.checkpointing import CheckpointFile
 from GlaDS_main.hydro_class import GLADS
 import GlaDS_main.helpers as hlp
 import numpy as np
+import pandas as pd
 
 s_per_day = 3600 * 24
 results_dir = 'step_5/'
@@ -9,7 +12,7 @@ results_dir = 'step_5/'
 # shmip
 shmip_suit = "E5"
 m          = 1.158e-6
-e_v        = 5e-3
+e_v        = 1e-3
 
 # mesh
 mesh = df.Mesh("valley.msh")
@@ -17,9 +20,9 @@ mesh = df.Mesh("valley.msh")
 # time stepping
 dt0 = s_per_day*0.01
 dt_max = s_per_day*45
-dt_min = s_per_day*1e-5
+dt_min = s_per_day*1e-3
 timestep_increase_fraction = 1.01
-timestep_reduction_fraction = 0.5
+timestep_reduction_fraction = 0.9
 
 
 # E suites geometry
@@ -46,27 +49,41 @@ hydro = GLADS(mesh, results_dir)
 hydro.build_variables(m, dt0, surface, bed, e_v)
 hlp.plot_geometry(hydro)
 
-x, y = df.SpatialCoordinate(hydro.mesh)
-hydro.set_initial_phi(0.0) # default doesn't work here
+
+chk_file    =  "step_5/initial_fields_E2.h5"
+csv_file    =  "step_5/initial_S_E2.csv"
+with CheckpointFile(chk_file, 'r') as afile:
+    mesh_ = afile.load_mesh()
+    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+    hydro.set_initial_h(afile.load_function(mesh_, "h"))
+hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
+
+# x, y = df.SpatialCoordinate(hydro.mesh)
+# hydro.set_initial_phi(0.0) # default doesn't work here
 # hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
-def S_init(x):
-    return 20 * (1-x/6e3) * np.random.rand()
-hydro.set_initial_S(S_init(x))
+# def S_init(x):
+#     return 20 * (1-x/6e3) * np.random.rand()
+# hydro.set_initial_S(S_init(x))
 # hydro.set_initial_S(20*(1-x/6e3))  # 20 * .. worked for E1-E3
 
 # solver options
 par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
-       "snes_atol": 1e-3,
+       "snes_atol": 1e-4,
        "snes_max_it": 1000,
        "report": True,
        "snes_monitor": None,
        "error_on_nonconvergence": True}
 
+bla = df.Function(hydro.V_phi)
+bla.interpolate(hydro.N)
+print(min(bla.vector()[:]))
+bla_fl = VTKFile("N.pvd")
+
 # time stepping and solve
 t     = 0.0
-t_end = s_per_day*365*100
+t_end = s_per_day*365*30
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
     print([t / (3600*24*365), dt / s_per_day])
@@ -74,11 +91,18 @@ while (t <= t_end):
         print("Minimal time step reached. Simulation failed.")
         break
     try:
+        print(min(hydro.U.sub(2).vector()[:]))
+        print(min(hydro.U.sub(1).vector()[:]))
+
         df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
         hydro.update_time_variables()
         t += dt
         hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
         hydro.write_variables_pvd(t)
+
+        bla.interpolate(hydro.N)
+        bla_fl.write(bla)
+        print(min(bla.vector()[:]))
 
         # Doug's trick to save Q
         # df.solve(F_Q == 0, dQ)
@@ -88,6 +112,13 @@ while (t <= t_end):
         # If solver fails, try again with a smaller time step
         hydro.dt.assign(dt*timestep_reduction_fraction)
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
+
+from firedrake.pyplot import tripcolor, triplot
+import matplotlib.pyplot as plt
+fig, axes = plt.subplots()
+cl = tripcolor(bla, axes=axes)
+fig.colorbar(cl)
+plt.savefig("bla.jpg")
 
 # save end result such that it can serve as initial field for another simulation
 # if shmip_suit == "A1":
