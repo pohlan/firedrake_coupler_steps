@@ -8,29 +8,41 @@ import pandas as pd
 s_per_hour  = 3600
 s_per_day   = s_per_hour * 24
 s_per_year  = s_per_day * 365
-results_dir = 'step_6/'
+results_dir = 'step_7/'
 
 # mesh
-nx, ny = 45, 15
-Lx, Ly = 100e3, 20e3
-mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+mesh = df.Mesh("valley.msh")
 x, y = df.SpatialCoordinate(mesh)
 
 # shmip
-shmip_suit = "D5"
-shmip_DT = {"D1" : -4,
-            "D2" : -2,
-            "D3" :  0,
-            "D4" :  2,
-            "D5" :  4}
+shmip_suit = "F5"
+shmip_DT = {"F1" : -6,
+            "F2" : -3,
+            "F3" :  0,
+            "F4" :  3,
+            "F5" :  6}
 DT = shmip_DT[shmip_suit]
 
-# geometry
+# E suites geometry
+para_bench = 0.05
+shmip_para = {"E1":  0.05,
+              "E2":  0.0 ,
+              "E3": -0.1 ,
+              "E4": -0.5 ,
+              "E5": -0.7 }
+para = shmip_para["E1"]
 def surface(x,y):
-    return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+    return 100*(x+200)**(1/4) + 1/60*x - 2e10**(1/4) + 1
+def f(x,para):
+    return (surface(6e3,0) - para*6e3)/6e3**2 * x**2 + para*x
+def g(y):
+    return 0.5e-6 * abs(y)**3
+def h(x,para):
+    return (-4.5*x/6e3 + 5) * (surface(x,0)-f(x, para)) / (surface(x,0)-f(x, para_bench)+1e-15)
 def bed(x,y):
-    return 0
+    return f(x,para) + g(y) * h(x,para)
 
+# seasonal melt water input
 def temp(t):
     return -16*df.cos(2*df.pi/s_per_year*t)- 5 + DT
 def runoff(t):
@@ -40,27 +52,26 @@ def runoff(t):
     zs    = surface(x,y)
     return df.max_value(0, (zs*lr+temp(t))*DDF) + basal
 m = runoff(0.0)
-# print(m)
+e_v        = 1e-3
 
 # time stepping
-dt0 = s_per_hour*1
-dt_max = s_per_hour*5
+dt0    = s_per_hour*5
+# dt_max = s_per_hour*5
 dt_min = s_per_hour*1e-2
 timestep_increase_fraction = 1.1
 timestep_reduction_fraction = 0.5
 def get_dt(m):
-    return max(5.0*s_per_hour, s_per_hour*15 + s_per_hour*(0.5-15)/(8.1e-7-7.93e-11) * (m-7.93e-11))
+    return max(s_per_hour*5, s_per_hour*15 + s_per_hour*(0.5-15)/(8.1e-7-7.93e-11) * (m-7.93e-11))
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0, surface, bed)
+hydro.build_variables(m, dt0, surface, bed, e_v)
 
 hlp.plot_geometry(hydro)
 
-
-# for initial state, take steady state solution from a different run
-chk_file    =  "step_4/initial_fields_A1.h5"
-csv_file    =  "step_4/initial_S_A1.csv"
+# for initial state, take steady state solution from a different run  (make sure it is the steady state for E1 and m=7.93e-11 not the default m)
+chk_file    =  "step_5/initial_fields_E1.h5"
+csv_file    =  "step_5/initial_S_E1.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -71,7 +82,7 @@ hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
-       "snes_atol": 1e-5,
+       "snes_atol": 1e-4,
        "snes_max_it": 500,
        "report": True,
        "snes_monitor": None,
@@ -91,7 +102,6 @@ while (t <= t_end):
         df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
         hydro.update_time_variables()
         t += dt
-        # hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
         hydro.dt.assign(get_dt(np.max(hydro.m.vector()[:])))
         hydro.m.interpolate(runoff(t))
         if int(t / s_per_day) >= d+10:
@@ -108,16 +118,3 @@ while (t <= t_end):
         # If solver fails, try again with a smaller time step
         hydro.dt.assign(dt*timestep_reduction_fraction)
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
-
-# save end result such that it can serve as initial field for another simulation
-# if shmip_suit == "A1":
-# chk_file_save = results_dir + "initial_fields_"+shmip_suit+".h5"
-# csv_file_save = results_dir + "initial_S_"+shmip_suit+".csv"
-# hydro.save_end_state(chk_file_save, csv_file_save)
-
-# make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-# hlp.scatterplt_fields(hydro, shmip_suit)
-
-# test against GlaDS-matlab SHMIP results
-# fl = "SHMIP_results/mw/"+shmip_suit+"_mw.nc"
-# hlp.diff_to_glads_matlab(hydro, fl)

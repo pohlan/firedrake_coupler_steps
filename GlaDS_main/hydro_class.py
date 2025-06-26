@@ -102,9 +102,15 @@ class GLADS(object):
 
         # Channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
-        Sthresh = 5e-5 # TODO: what are these thresholds?
-        f_S = 1 - df.max_value(0.0, df.min_value(1.0, S/1e-2))
-        f_P = 1 - df.max_value(0.0, df.min_value(1.0, q_c*dPds/Sthresh))
+        # S > Sthresh: f_S = 0 --> for sure f = 1
+        # 0 < S < Sthresh: 0 < f_s < 1
+        # S =< 0: f_S = 1
+        # Sthresh too high: less refreezing, only when channels are bigger
+        # Pthresh too high: harder for small channels to re-open
+        Sthresh = 5e-2       # below this threshold, allow only reduced freeze-on from sheet input; below 0 don't allow any (given that there is freeze-on)
+        Pthresh = 5e-2       # below this threshold, there is reduced freeze-on; below zero, no freeze-on present (above threshold: normal melt)
+        f_S = 1 - df.max_value(0.0, df.min_value(1.0, S/Sthresh))
+        f_P = 1 - df.max_value(0.0, df.min_value(1.0, q_c*dPds/Pthresh))
         f   = 1 - f_S*f_P
         Pi = -ct*cw*rho_w*(Q+f*l_c*q_c)*dPds
         # Pi = 0 is no problem; f=1-f_P works as well; f=1-f_S doesn't if the threshold is too low
@@ -118,7 +124,7 @@ class GLADS(object):
         R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q) + xsi * (O-C-m) ) * df.dx
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx
-        R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + ((S-S0)/dt - O_c + C_c)*w * df.ds(1) + S*w*df.ds(2) # last term is to enforse S = 0 at boundary edges
+        R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
         self.F  = R_phi_h + R_phi_S + R_h + R_S
 
         # trick for saving Q

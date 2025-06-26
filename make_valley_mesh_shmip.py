@@ -17,7 +17,7 @@ def outline(x):
     return ginv( (surface(x,0)-f(x,0.05))/(h(x,0.05)+1e-15) )
 
 # evaluate on a number of points
-x = np.concatenate([np.arange(0,150,80), np.arange(150, 5.8e3, 350), np.arange(5.8e3, 6e3, 80)])
+x = np.concatenate([np.arange(0,150,80), np.arange(150, 5.8e3, 180), np.arange(5.8e3, 6e3, 80)])
 y = outline(x)
 y[0] = 30
 xpts = np.concatenate([x,np.flip(x), [0]])
@@ -30,7 +30,7 @@ ypts = np.concatenate([y,np.flip(-y), [0]])
 gmsh.initialize()
 geometry = gmsh.model.geo
 
-lc  = 450
+lc  = 180
 points = [geometry.add_point(xi,yi,0,lc) for (xi,yi) in zip(xpts,ypts)]
 lines  = [geometry.add_line(pt1, pt2) for (pt1,pt2) in zip(points, np.concatenate([points[1:],[points[0]]])) ]
 

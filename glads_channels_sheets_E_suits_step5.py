@@ -50,8 +50,8 @@ hydro.build_variables(m, dt0, surface, bed, e_v)
 hlp.plot_geometry(hydro)
 
 
-chk_file    =  "step_5/initial_fields_E2.h5"
-csv_file    =  "step_5/initial_S_E2.csv"
+chk_file    =  "step_5/initial_fields_E3.h5"
+csv_file    =  "step_5/initial_S_E3.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -83,7 +83,7 @@ bla_fl = VTKFile("N.pvd")
 
 # time stepping and solve
 t     = 0.0
-t_end = s_per_day*365*30
+t_end = s_per_day*365*100
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
     print([t / (3600*24*365), dt / s_per_day])
@@ -91,18 +91,12 @@ while (t <= t_end):
         print("Minimal time step reached. Simulation failed.")
         break
     try:
-        print(min(hydro.U.sub(2).vector()[:]))
-        print(min(hydro.U.sub(1).vector()[:]))
 
         df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
         hydro.update_time_variables()
         t += dt
         hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
         hydro.write_variables_pvd(t)
-
-        bla.interpolate(hydro.N)
-        bla_fl.write(bla)
-        print(min(bla.vector()[:]))
 
         # Doug's trick to save Q
         # df.solve(F_Q == 0, dQ)
