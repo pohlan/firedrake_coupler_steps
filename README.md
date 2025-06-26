@@ -35,13 +35,20 @@
 Left: 🔥🐉, right: GlaDS-matlab
 
 
-### Step 5: implementing the E test cases (valley geometry)  # TO FIX
+### Step 5: implementing the E test cases (valley geometry)
 
 - mesh now generated with `make_valley_mesh_shmip.py` using `gmsh` rather than in firedrake directly; taking the outline function y(x) from the shmip instruction website and generating points along it
 - working for E1-E4 at the moment; time step has to reduce a couple times but recovers; not for E5, it cannot get above ~0.06 which takes ages go reach steady state; changing the mesh slightly or the initial conditions has not lead to success yet
+- The trick for getting E5 to run was to apply a little trick copied from GlADS: `f` switches not at exactly `S=0` or `dPds=0` but at a certain threshold, and between 0 and that threshold it is a number betwen 0 and 1.
+- Also, it helps to initialize E5 with E2 or E3.
 
 
 ### Step 6: D test cases (ice sheet geometry with seasonal melt input)
 
 - working well for D1-D5; needed some trial and error to figure out which time steps are reasonal, here used an ad hoc linear function depending on `m`, always in the range of 5h to 15h.
 - for D5, channels nicely form and close seasonally
+
+### Step 7: F test cases (valley geometry with seasonal melt input)
+
+- taking over setup from step 6 including time stepping; works pretty well for F1-F5
+- just need to make sure that the steady state for initialization is run with the same `m` as the background level of the seasonal input (which is different than the value for all `E` cases)
