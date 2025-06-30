@@ -16,6 +16,7 @@ e_v        = 1e-3
 
 # mesh
 mesh = df.Mesh("valley.msh")
+x, y = df.SpatialCoordinate(mesh)
 
 # time stepping
 dt0 = s_per_day*0.01
@@ -46,7 +47,7 @@ def bed(x,y):
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0, surface, bed, e_v)
+hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v)
 hlp.plot_geometry(hydro)
 
 
@@ -58,7 +59,6 @@ with CheckpointFile(chk_file, 'r') as afile:
     hydro.set_initial_h(afile.load_function(mesh_, "h"))
 hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 
-# x, y = df.SpatialCoordinate(hydro.mesh)
 # hydro.set_initial_phi(0.0) # default doesn't work here
 # hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
 # def S_init(x):

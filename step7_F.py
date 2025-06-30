@@ -65,7 +65,7 @@ def get_dt(m):
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0, surface, bed, e_v)
+hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v)
 
 hlp.plot_geometry(hydro)
 

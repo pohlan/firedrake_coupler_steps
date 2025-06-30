@@ -52,3 +52,10 @@ Left: 🔥🐉, right: GlaDS-matlab
 
 - taking over setup from step 6 including time stepping; works pretty well for F1-F5
 - just need to make sure that the steady state for initialization is run with the same `m` as the background level of the seasonal input (which is different than the value for all `E` cases)
+
+### Step 8: GlaDS on real geometry (russel basin Greenland)
+
+- run into steady state, works well with bedmachine data, no smoothing or similar of the geometry
+- manually selected a outline for the mesh; Dirichlet BC on full front line although it also includes some marginal lines in between termini of different glaciers (probably change at some point??)
+- constant melt water input `m` (as always runs better when this is low, not working for 1e-7 right now)
+- no channels with `m=1e-8`

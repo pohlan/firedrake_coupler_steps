@@ -23,7 +23,7 @@ class GLADS(object):
         # self.outfile_S   = VTKFile(results_dir+'step2_S.pvd')
         # self.outfile_Q   = VTKFile(results_dir+'step2_Q.pvd')
 
-    def build_variables(self, m_, dt_, surface, bed, e_v_=0.0): # shmip_m[shmip_suit]
+    def build_variables(self, m_, dt_, thik, bed, e_v_=0.0): # shmip_m[shmip_suit]
         # constants
         rho_i = df.Constant(910)      # kg / m^3
         rho_w = df.Constant(1000)     # kg / m^3
@@ -47,11 +47,10 @@ class GLADS(object):
         m.interpolate(m_)
 
         # initialize bed and ice surface
-        x, y = df.SpatialCoordinate(self.mesh)
         B = self.B = df.Function(self.V_phi)
-        self.B.interpolate(bed(x,y))
+        self.B.interpolate(bed)
         H = self.H = df.Function(self.V_phi)
-        self.H.interpolate(df.max_value(surface(x,y)-bed(x,y),0))
+        self.H.interpolate(df.max_value(thik,0))
 
         # trial and test functions
         U  = self.U = df.Function(self.V)

@@ -11,6 +11,7 @@ results_dir = 'step_4/'
 nx, ny = 75, 25
 Lx, Ly = 100e3, 20e3
 mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+x, y = df.SpatialCoordinate(mesh)
 
 # shmip
 shmip_suit = "A6"
@@ -37,7 +38,7 @@ timestep_reduction_fraction = 0.5
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0, surface, bed)
+hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y))
 
 hlp.plot_geometry(hydro)
 
@@ -49,7 +50,7 @@ hlp.plot_geometry(hydro)
 #     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
 #     hydro.set_initial_h(afile.load_function(mesh_, "h"))
 # hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
-x, y = df.SpatialCoordinate(hydro.mesh)
+
 hydro.set_initial_S(20*(1-x/100e3))
 
 # solver options
