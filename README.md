@@ -67,3 +67,4 @@ Left: 🔥🐉, right: GlaDS-matlab
 
 <img width="1837" height="408" alt="image" src="https://github.com/user-attachments/assets/2484d127-56df-4e0e-a030-b1ed6681d2a5" />
 
+- edit: indeed, the default for `beta2` was very low (2e-3), using max. posterior values in Brinkerhoff et al, 2021, something like `beta2=140` is more realistic, and that gives a reasonable-looking result

@@ -61,7 +61,7 @@ plt.savefig(f"{results_dir}H.jpg")
 coupler.set_geometry(B_c,B_d,H_c,H_d)
 
 stokes.set_coupler(coupler)
-stokes.build_variables(results_dir=results_dir)
+stokes.build_variables(p=0.6,q=0.6,beta2=140,results_dir=results_dir)
 stokes.build_forms()
 
 solver_params = {"snes_type": "vinewtonrsls",#newton

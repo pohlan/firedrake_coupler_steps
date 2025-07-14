@@ -128,7 +128,7 @@ class SpecFO(object):
         B = self.coupler.B_c
         S = self.coupler.S
         # N = self.coupler.hydro.N
-        N = 1.0*rho_i*g*H
+        N = 0.5*rho_i*g*H
 
         def dsdx(s):
             return 1./H*(S.dx(0) - s*H.dx(0))
