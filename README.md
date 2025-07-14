@@ -59,3 +59,8 @@ Left: 🔥🐉, right: GlaDS-matlab
 - manually selected a outline for the mesh; Dirichlet BC on full front line although it also includes some marginal lines in between termini of different glaciers (probably change at some point??)
 - constant melt water input `m` (as always runs better when this is low, not working for 1e-7 right now)
 - no channels with `m=1e-8`
+
+### Step 9a: first time running ice flow; SpecFO, no ice thickness evolution only velocity, on SHMIP E1 valley geometry
+
+- not coupled to GlaDS for now, `N` set to constant fraction of overburden
+- Currently, it is too slippery and even for `N = 1.0*rho*g*H` the velocity is highest at the front and non-zero where ice thickness is almost zero; confusing at first; `N` can be set to 1e10 to get more realistic spatial distribution of velocity, probably need to adjust some parameters

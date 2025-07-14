@@ -1,8 +1,8 @@
 import firedrake as df
 from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
-from GlaDS_main.hydro_class import GLADS
-import GlaDS_main.helpers as hlp
+from models_main.hydro_class import GLADS
+import models_main.helpers as hlp
 import numpy as np
 import pandas as pd
 

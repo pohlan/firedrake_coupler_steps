@@ -1,6 +1,6 @@
 import firedrake as df
-from GlaDS_main.hydro_class import GLADS
-import GlaDS_main.helpers as hlp
+from models_main.hydro_class import GLADS
+import models_main.helpers as hlp
 from firedrake.checkpointing import CheckpointFile
 import numpy as np
 
