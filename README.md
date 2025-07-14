@@ -63,4 +63,7 @@ Left: 🔥🐉, right: GlaDS-matlab
 ### Step 9a: first time running ice flow; SpecFO, no ice thickness evolution only velocity, on SHMIP E1 valley geometry
 
 - not coupled to GlaDS for now, `N` set to constant fraction of overburden
-- Currently, it is too slippery and even for `N = 1.0*rho*g*H` the velocity is highest at the front and non-zero where ice thickness is almost zero; confusing at first; `N` can be set to 1e10 to get more realistic spatial distribution of velocity, probably need to adjust some parameters
+- Currently, it is too slippery and even for `N = 1.0*rho*g*H` the velocity is highest at the front and non-zero where ice thickness is almost zero; confusing at first; `N` can be set to 1e10 to get more realistic spatial distribution of velocity (plot below), probably need to adjust some parameters
+
+<img width="1837" height="408" alt="image" src="https://github.com/user-attachments/assets/2484d127-56df-4e0e-a030-b1ed6681d2a5" />
+
