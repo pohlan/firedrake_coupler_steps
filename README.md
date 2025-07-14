@@ -64,3 +64,4 @@ Left: 🔥🐉, right: GlaDS-matlab
 
 - not coupled to GlaDS for now, `N` set to constant fraction of overburden
 - Currently, it is too slippery and even for `N = 1.0*rho*g*H` the velocity is highest at the front and non-zero where ice thickness is almost zero; confusing at first; `N` can be set to 1e10 to get more realistic spatial distribution of velocity, probably need to adjust some parameters
+- edit: indeed, the default for `beta2` was very low (2e-3), using max. posterior values in Brinkerhoff et al, 2021, something like `beta2=140` is more realistic, and that gives a reasonable-looking result
