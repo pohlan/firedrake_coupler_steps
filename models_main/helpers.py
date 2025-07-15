@@ -8,20 +8,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-def plot_geometry(hydro):
+def plot_geometry(B, H, mesh):
     # bed
     fig, axes = plt.subplots()
-    cl = tripcolor(hydro.B, axes=axes)
+    cl = tripcolor(B, axes=axes)
     fig.colorbar(cl)
     plt.savefig("B.jpg")
     # thickness
     fig, axes = plt.subplots()
-    cl = tripcolor(hydro.H, axes=axes)
+    cl = tripcolor(H, axes=axes)
     fig.colorbar(cl)
     plt.savefig("H.jpg")
     # mesh
     fig, axes = plt.subplots()
-    colors = triplot(hydro.mesh, axes=axes)
+    colors = triplot(mesh, axes=axes)
     axes.legend()
     plt.savefig("mesh.jpg")
 

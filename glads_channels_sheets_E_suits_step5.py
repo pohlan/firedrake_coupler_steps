@@ -48,7 +48,7 @@ def bed(x,y):
 # hydro object
 hydro = GLADS(mesh, results_dir)
 hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v)
-hlp.plot_geometry(hydro)
+hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
 
 chk_file    =  "step_5/initial_fields_E3.h5"

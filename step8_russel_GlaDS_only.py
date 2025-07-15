@@ -42,7 +42,7 @@ with rio.open(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness") as src:
     H.dat.data[:] = np.array([pnt[0] for pnt in src.sample(zip(meshx, meshy))])
 
 hydro.build_variables(m, dt0, H, B, e_v)
-hlp.plot_geometry(hydro)
+hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
 par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps",

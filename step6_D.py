@@ -55,7 +55,7 @@ def get_dt(m):
 hydro = GLADS(mesh, results_dir)
 hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y))
 
-hlp.plot_geometry(hydro)
+hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
 
 # for initial state, take steady state solution from a different run
