@@ -25,18 +25,18 @@ def plot_geometry(B, H, mesh):
     axes.legend()
     plt.savefig("mesh.jpg")
 
-def scatterplt_fields(hydro, dest_id):
-    for (field, name, element) in zip(hydro.U.subfunctions, ["phi", "h", "S"], hydro.E_V.sub_elements): # [hydro.E_phi, hydro.E_h, hydro.E_S]):
+def scatterplt_fields(subfunctions, names, E_V, mesh, results_dir, dest_id):
+    for (field, name, element) in zip(subfunctions, names, E_V.sub_elements):
         # get dof coordinates
-        Vmesh = df.VectorFunctionSpace(hydro.mesh, element)
-        X = df.assemble(interpolate(hydro.mesh.coordinates,Vmesh))
+        Vmesh = df.VectorFunctionSpace(mesh, element)
+        X = df.assemble(interpolate(mesh.coordinates,Vmesh))
         meshx = X.dat.data[:,0]
         meshy = X.dat.data[:,1]
         # scatter plot
         plt.figure()
         plt.scatter(meshx, meshy, 10, field.vector()[:])
         plt.colorbar()
-        plt.savefig(hydro.results_dir+name+"_"+dest_id+".jpg")
+        plt.savefig(results_dir+name+"_"+dest_id+".jpg")
 
 def diff_to_glads_matlab(hydro, file):
     ds_mw = xr.open_dataset(file)

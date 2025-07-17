@@ -95,7 +95,7 @@ csv_file_save = results_dir + "initial_S_"+shmip_suit+".csv"
 hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-hlp.scatterplt_fields(hydro, shmip_suit)
+hlp.scatterplt_fields(hydro.U.subfunctions, ["phi", "h", "S"], hydro.E_V, mesh, results_dir, shmip_suit)
 
 # test against GlaDS-matlab SHMIP results
 fl = "SHMIP_results/mw/"+shmip_suit+"_mw.nc"

@@ -1,11 +1,8 @@
 import firedrake as df
 from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
-from models_main.hydro_class_coupled import GLADS
-from models_main.SpecFO import SpecFO, Coupler
+from models_main.coupled_model import GLADS, SpecFO, Coupler
 import models_main.helpers as hlp
-# import numpy as np
-# import pandas as pd
 
 # import rasterio as rio
 # from firedrake.__future__ import interpolate
@@ -13,19 +10,30 @@ import models_main.helpers as hlp
 s_per_day = 3600 * 24
 results_dir = 'step_10a/'
 
-m          = 1e-11
-e_v        = 1e-2
+m          = 1e-9
+e_v        = 0 # 1e-3
 
 # mesh
 mesh = df.Mesh("valley.msh")
 x, y = df.SpatialCoordinate(mesh)
 
+# nx, ny = 30, 10
+# Lx, Ly = 100e3, 20e3
+# mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+# x, y = df.SpatialCoordinate(mesh)
+
 # time stepping
-dt0 = s_per_day*0.01
-dt_max = s_per_day*45
-dt_min = s_per_day*1e-3
-timestep_increase_fraction = 1.01
+dt0 = 0.01/365
+dt_max = 45/365    # s_per_day*45
+dt_min = 1e-3/365 #s_per_day*1e-3
+timestep_increase_fraction = 1.1
 timestep_reduction_fraction = 0.9
+
+# dt0 = s_per_day*0.01
+# dt_max = s_per_day*45
+# dt_min = s_per_day*1e-3
+# timestep_increase_fraction = 1.1
+# timestep_reduction_fraction = 0.9
 
 # initiate classes
 hydro   = GLADS(mesh, results_dir)
@@ -52,6 +60,12 @@ def h(x,para):
 def bed(x,y):
     return f(x,para) + g(y) * h(x,para)
 
+# shmip_suit = "A6"
+# def surface(x,y):
+#     return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+# def bed(x,y):
+#     return 0
+
 B = df.Function(coupler.Q_cg).interpolate(bed(x,y))
 H = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
 
@@ -70,58 +84,53 @@ hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
 hydro.build_forms(m, dt0=dt0, e_v=e_v)
-stokes.build_forms()
+stokes.build_forms(beta2=80)
 hlp.plot_geometry(coupler.B, coupler.H, mesh)
 
-# par = {"snes_type": "vinewtonrsls",
-#        "pc_factor_mat_solver_type": "mumps",
-#        "snes_rtol": 1e-5,
-#        "snes_atol": 1e-4,
-#        "snes_max_it": 300,
-#        "report": True,
-#        "snes_monitor": None,
-#        "error_on_nonconvergence": True}
+# for initial state, take steady state solution from a different run
+chk_file    = "step_5/initial_fields_E1.h5"
+with CheckpointFile(chk_file, 'r') as afile:
+    mesh_ = afile.load_mesh()
+    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+    hydro.set_initial_h(afile.load_function(mesh_, "h"))
+# hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
+# hydro.set_initial_S(20*(1-x/100e3))
 
 
 solver_params = {"snes_type": "vinewtonrsls",#newton
                  "pc_factor_mat_solver_type": "mumps", # ?
-                 "snes_rtol": 1e-3,
-                 "snes_atol": 1e0,
-                 "snes_max_it": 100,
+                 "snes_rtol": 1e-2,
+                 "snes_atol": 1e-2,
+                 "snes_max_it": 300,
                  "report": True,
                  "snes_monitor": None,
                  "error_on_nonconvergence": True}
                  # relaxation_parameter = 0.7   ???
-# problem = df.NonlinearVariationalProblem(coupler.R,coupler.U,bcs=hydro.bcs)
-# solver  = df.NonlinearVariationalSolver(problem, solver_parameters=solver_params)
 
+# df.solve(coupler.R == 0, coupler.U, solver_parameters=solver_params)
+# stokes.write_variables_pvd(0)
 
 # time stepping and solve
 t     = 0.0
-t_end = s_per_day*365*10
+t_end = 30
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
-    # dt = s_per_day*0.1
-    print([t / (3600*24*365), dt / s_per_day])
-    # print(min(dt*timestep_increase_fraction,dt_max))
-    # if dt < dt_min:
-    #     print("Minimal time step reached. Simulation failed.")
-    #     break
-    # try:
-    # problem = df.NonlinearVariationalProblem(coupler.R,coupler.U,bcs=hydro.bcs)
-    # solver  = df.NonlinearVariationalSolver(problem, solver_parameters=solver_params)
-    # solver.solve()
-    df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
-    hydro.update_time_variables()
-    t += dt
-    hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
-    hydro.write_variables_pvd(t)
-    stokes.write_variables_pvd(t)
-
-    # except df.exceptions.ConvergenceError:
-    #     # If solver fails, try again with a smaller time step
-    #     hydro.dt.assign(dt*timestep_reduction_fraction)
-    #     print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
+    print(f"Time = {t} years, dt = {dt*365} days")
+    if dt < dt_min:
+        print("Minimal time step reached. Simulation failed.")
+        break
+    try:
+        df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
+        hydro.update_time_variables()
+        t += dt
+        hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
+        hydro.write_variables_pvd(t)
+        stokes.write_variables_pvd(t)
+    except df.exceptions.ConvergenceError:
+        # If solver fails, try again with a smaller time step
+        hydro.dt.assign(dt*timestep_reduction_fraction)
+        print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-hlp.scatterplt_fields(hydro, "E1")
+hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, shmip_suit)
+hlp.scatterplt_fields(coupler.U[0:2], ["ubar_x, ubar_y"], df.MixedElement(stokes.elements[0:2]), mesh, results_dir, shmip_suit)

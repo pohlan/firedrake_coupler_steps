@@ -124,8 +124,8 @@ class SpecFO(object):
         v = self.v
         lamda_x = self.lamda_x
         lamda_y = self.lamda_y
-        H = self.coupler.H_c
-        B = self.coupler.B_c
+        H = self.coupler.H
+        B = self.coupler.B
         S = self.coupler.S
         # N = self.coupler.hydro.N
         N = 0.5*rho_i*g*H
@@ -223,12 +223,10 @@ class Coupler(object):
 
         self.R = 0
 
-    def set_geometry(self,B_c,B_d,H_c,H_d):
-        self.B_c = B_c
-        self.H_c = H_c
-        self.B_d = B_d
-        self.H_d = H_d
-        self.S = B_c + H_c
+    def set_geometry(self,B,H):
+        self.B = B
+        self.H = H
+        self.S = B + H
 
     # def set_forcing(self,m):
     #     self.m = m

@@ -2,6 +2,9 @@ import os
 os.environ['OMP_NUM_THREADS'] = '1'
 import firedrake as df
 from firedrake.output import VTKFile
+from firedrake.checkpointing import CheckpointFile
+import numpy as np
+import pandas as pd
 
 class VerticalBasis(object):
     def __init__(self,u,coef,dcoef):
@@ -168,8 +171,8 @@ class SpecFO(object):
         # INSTANTIATE VERTICAL INTEGRATOR
         vi = VerticalIntegrator(points,weights)
 
-        tau_bx = -beta2*Max(N,5e4)**p*abs(u(1)**2 + v(1)**2 + 1e-3)**((q-1)/2.)*u(1)
-        tau_by = -beta2*Max(N,5e4)**p*abs(u(1)**2 + v(1)**2 + 1e-3)**((q-1)/2.)*v(1)
+        tau_bx = -beta2*Max(N,5e4)**p*abs(u(1)**2 + v(1)**2 + 1e-3)**((q-1)/2.)*u(1)  # does not converge without the Max(N,...)
+        tau_by = -beta2*Max(N,5e4)**p*abs(u(1)**2 + v(1)**2 + 1e-3)**((q-1)/2.)*v(1)  # does not converge without the Max(N,...)
 
         R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx
         R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx
@@ -223,19 +226,20 @@ class GLADS(object):
         self.N   = rho_i * g * H - self.P_w
 
     def build_forms(self, m, e_v=1e-3, dt0=3600*2, k_s=5e-3, k_c=0.1, h_r=0.1, l_r=2.0, l_c=2.0, alpha=1.25, beta=1.5):
+        s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
         rho_w = self.coupler.rho_w
         g     = self.coupler.g
         n     = self.coupler.n
-        A     = self.coupler.A * 2 / n**n
+        A     = df.Constant(self.coupler.A*s_per_year * 2 / n**n)
         L     = self.coupler.L
         ct    = self.coupler.ct
         cw    = self.coupler.cw
 
         # parameters
-        k_s   = df.Constant(k_s)         # m^(7/4) kg^(-1/2) -- sheet conductivity
-        k_c   = df.Constant(k_c)         # m^(3/2) kg^(-1/2) -- channel conductivity
+        k_s   = df.Constant(k_s*s_per_year)       # m^(7/4) kg^(-1/2) -- sheet conductivity
+        k_c   = df.Constant(k_c*s_per_year)       # m^(3/2) kg^(-1/2) -- channel conductivity
         alpha = df.Constant(alpha)       # -                 -- flux exponent
         beta  = df.Constant(beta)        # -                 -- flux exponent
         h_r   = df.Constant(h_r)         # m                 -- bedrock bump height
@@ -244,7 +248,7 @@ class GLADS(object):
         e_v   = df.Constant(e_v)
 
         # source term
-        m            = df.Constant(m)
+        m            = df.Constant(m*s_per_year)
 
         # initial time step
         dt = self.dt = df.Constant(dt0)
@@ -312,11 +316,7 @@ class GLADS(object):
         Pi = -ct*cw*rho_w*(Q+f*l_c*q_c)*dPds
 
         # sliding speed from ice flow model
-        ux_b = self.coupler.stokes.u(0)+self.coupler.stokes.u(1)
-        uy_b = self.coupler.stokes.v(0)+self.coupler.stokes.v(1)
-        u_b = df.sqrt(ux_b**2 + uy_b**2 + 1e-10)
-        # u_b = df.sqrt(self.coupler.stokes.u(1)**2 + self.coupler.stokes.v(1)**2 + 1e-10)
-
+        u_b = df.sqrt(self.coupler.stokes.u(1)**2 + self.coupler.stokes.v(1)**2 + 1e-10)
 
         # opening and closure for sheets and channels
         O   = df.max_value(u_b*(h_r - h)/l_r,0)
@@ -371,7 +371,7 @@ class GLADS(object):
 
 
 class Coupler(object):
-    def __init__(self,mesh,stokes,hydro=None):
+    def __init__(self,mesh,stokes,hydro):
 
         # physical constants used in both models
         self.n     = df.Constant(3)           # -              -- flow exponent
