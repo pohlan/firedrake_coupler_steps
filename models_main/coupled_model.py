@@ -309,7 +309,7 @@ class GLADS(object):
         # Sthresh too high: less refreezing, only when channels are bigger
         # Pthresh too high: harder for small channels to re-open
         Sthresh = 5e-2       # below this threshold, allow only reduced freeze-on from sheet input; below 0 don't allow any (given that there is freeze-on)
-        Pthresh = 5e-2       # below this threshold, there is reduced freeze-on; below zero, no freeze-on present (above threshold: normal melt)
+        Pthresh = 5e-2*3.1536e7       # below this threshold, there is reduced freeze-on; below zero, no freeze-on present (above threshold: normal melt)
         f_S = 1 - df.max_value(0.0, df.min_value(1.0, S/Sthresh))
         f_P = 1 - df.max_value(0.0, df.min_value(1.0, q_c*dPds/Pthresh))
         f   = 1 - f_S*f_P
