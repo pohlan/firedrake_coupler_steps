@@ -75,4 +75,5 @@ several things needed for making this work:
 
 - The time scale needs to be the same between hydro and ice flow; to adjust constants, do `df.Constant(k_c*s_per_year)`; `df.Constant(k_c)*s_per_year` changes the result and gives something weird
 - Initializing hydro with GlaDS-only steady states helps a lot!
-- In ice flow model: `tau_b = ... * Max(N, 5e4) * ...` seems to be necessary; might have to experiment a bit more with it though.. Right now the `N` in hydro can be smaller (even negative) but it has this lower bound in the ice flow
+- In ice flow model: `tau_b = ... * Max(N, 5e4) * ...` seems to be necessary; might have to experiment a bit more with it though.. Right now the `N` in hydro can be smaller (even negative) but it has this lower bound in the basal friction
+- ice sheet (sqrt) SHMIP test cases worked better at first, for valley geometry it was necessary to adjust the parameters; the hydro model alone didn't converge for too small u_b like 1e-7; most effective parameter change was to increase h_r (was also in the order of 1e0 to 1e1 in Brinkerhoff et al., 2021, compared to the default value 0.1 prescribed in SHMIP)
