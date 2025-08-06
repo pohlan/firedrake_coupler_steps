@@ -9,24 +9,24 @@ import pandas as pd
 s_per_day = 3600 * 24
 results_dir = 'step_10a/'
 
-m          = 5.79e-7
+m          = 1.158e-6
 e_v        = 1e-3
 
 # mesh
-# mesh = df.Mesh("valley.msh")
-# x, y = df.SpatialCoordinate(mesh)
+mesh = df.Mesh("valley.msh")
+x, y = df.SpatialCoordinate(mesh)
 
-nx, ny = 75, 25
-Lx, Ly = 100e3, 20e3
-mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+# nx, ny = 75, 25
+# Lx, Ly = 100e3, 20e3
+# mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
 x, y = df.SpatialCoordinate(mesh)
 
 # time stepping
 dt0 = 0.01/365
 dt_max = 45/365    # s_per_day*45
 dt_min = 1e-3/365 #s_per_day*1e-3
-timestep_increase_fraction = 1.05
-timestep_reduction_fraction = 0.5
+timestep_increase_fraction = 1.01
+timestep_reduction_fraction = 0.9
 
 # dt0 = s_per_day*0.01
 # dt_max = s_per_day*45
@@ -40,30 +40,32 @@ stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler(mesh, stokes, hydro)
 
 # geometry
-# shmip_suit = "E1"
-# para_bench = 0.05
-# shmip_para = {"E1":  0.05,
-#               "E2":  0.0 ,
-#               "E3": -0.1 ,
-#               "E4": -0.5 ,
-#               "E5": -0.7 }
-# para = shmip_para[shmip_suit]
-# def surface(x,y):
-#     return 100*(x+200)**(1/4) + 1/60*x - 2e10**(1/4) + 1
-# def f(x,para):
-#     return (surface(6e3,0) - para*6e3)/6e3**2 * x**2 + para*x
-# def g(y):
-#     return 0.5e-6 * abs(y)**3
-# def h(x,para):
-#     return (-4.5*x/6e3 + 5) * (surface(x,0)-f(x, para)) / (surface(x,0)-f(x, para_bench)+1e-15)
-# def bed(x,y):
-#     return f(x,para) + g(y) * h(x,para)
+shmip_suit = "E1"
+para_bench = 0.05
+shmip_para = {"E1":  0.05,
+              "E2":  0.0 ,
+              "E3": -0.1 ,
+              "E4": -0.5 ,
+              "E5": -0.7 }
+para = shmip_para[shmip_suit]
 
-shmip_suit = "A6"
 def surface(x,y):
-    return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+    return 100*(x+200)**(1/4) + 1/60*x - 2e10**(1/4) + 1
+def f(x,para):
+    return (surface(6e3,0) - para*6e3)/6e3**2 * x**2 + para*x
+def g(y):
+    return 0.5e-6 * abs(y)**3
+def h(x,para):
+    return (-4.5*x/6e3 + 5) * (surface(x,0)-f(x, para)) / (surface(x,0)-f(x, para_bench)+1e-15)
 def bed(x,y):
-    return 0
+    return f(x,para) + g(y) * h(x,para)
+
+# shmip_suit = "A6"
+# def surface(x,y):
+#     return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+# def bed(x,y):
+#     return 0
+
 
 B = df.Function(coupler.Q_cg).interpolate(bed(x,y))
 H = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
@@ -82,19 +84,21 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=e_v)
+hydro.build_forms(m, dt0=dt0, e_v=e_v, h_r=6.0, k_c=1e-3)
 stokes.build_forms(beta2=100)
 hlp.plot_geometry(coupler.B, coupler.H, mesh)
 
 # for initial state, take steady state solution from a different run
-chk_file    = "step_4/initial_fields_A6.h5"
-csv_file    = "step_4/initial_S_A6.csv"
+# chk_file    = "step_4/initial_fields_A6.h5"
+# csv_file    = "step_4/initial_S_A6.csv"
+chk_file    = "step_5/initial_fields_E1.h5"
+csv_file    = "step_5/initial_S_E1.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
     hydro.set_initial_h(afile.load_function(mesh_, "h"))
 hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
-# hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
+# hydro.set_initial_S(10 * np.random.rand(len(coupler.U.sub(2).vector()[:])))
 # hydro.set_initial_S(20*(1-x/100e3))
 
 
