@@ -52,8 +52,8 @@ class SpecFO(object):
 
         # create output files
         self.results_dir = results_dir
-        self.Us_file = VTKFile(results_dir+results_dir[:-1]+'U_s.pvd')
-        self.Ub_file = VTKFile(results_dir+results_dir[:-1]+'U_b.pvd')
+        self.Us_file = VTKFile(results_dir+'df_U_s.pvd')
+        self.Ub_file = VTKFile(results_dir+'df_U_b.pvd')
 
     def set_coupler(self,coupler):
         self.coupler = coupler
@@ -92,13 +92,15 @@ class SpecFO(object):
         # self.Ub = df.project(df.as_vector([self.u(1),self.v(1)]), self.Q)
         self.Ub = df.project(df.sqrt(self.u(1)**2+self.v(1)**2), self.coupler.Q_cg)
 
-    def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140):
+    def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1):
         n          = self.coupler.n
         g          = self.coupler.g
         rho_i      = self.coupler.rho_i
         # scale ice flow constant to get velocities in m/a not m/s
         s_per_year = 3600*24*365
         Be         = (self.coupler.A*s_per_year)**(-1/n) # Pa^(-n) a^(-1)
+        Uhat       = df.Constant(Uhat)
+        Nhat       = df.Constant(Nhat)
         # ice flow specific constants
         eps_reg    = df.Constant(eps_reg)
         p          = df.Constant(p)
@@ -171,8 +173,8 @@ class SpecFO(object):
         # INSTANTIATE VERTICAL INTEGRATOR
         vi = VerticalIntegrator(points,weights)
 
-        tau_bx = -beta2*Max(N,5e4)**p*abs(u(1)**2 + v(1)**2 + 1e-3)**((q-1)/2.)*u(1)  # does not converge without the Max(N,...)
-        tau_by = -beta2*Max(N,5e4)**p*abs(u(1)**2 + v(1)**2 + 1e-3)**((q-1)/2.)*v(1)  # does not converge without the Max(N,...)
+        tau_bx = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
+        tau_by = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
 
         R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx
         R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx
@@ -206,8 +208,8 @@ class GLADS(object):
 
         # create output files
         self.results_dir = results_dir
-        self.outfile_phi = VTKFile(results_dir+results_dir[:-1]+'_phi.pvd')
-        self.outfile_h   = VTKFile(results_dir+results_dir[:-1]+'_h.pvd')
+        self.outfile_phi = VTKFile(results_dir+'df_phi.pvd')
+        self.outfile_h   = VTKFile(results_dir+'df_h.pvd')
 
     def set_coupler(self,coupler):
         self.coupler = coupler
@@ -270,7 +272,7 @@ class GLADS(object):
 
         # initial fields, default
         phi0 = self.phi0 = df.Function(self.V_phi)
-        phi0.interpolate(rho_i * g * H + rho_w * g * B)
+        phi0.interpolate(0.5*rho_i * g * H + rho_w * g * B)
         h0   = self.h0   = df.Function(self.V_h)
         h0.vector()[:]   = 0.5*h_r
         S0   = self.S0   = df.Function(self.V_S)
@@ -402,6 +404,6 @@ class Coupler(object):
         self.R = 0
 
     def set_geometry(self,B,H):
-        self.B = B
-        self.H = H
-        self.S = B + H
+        self.B = df.Function(self.hydro.V_phi).project(B)
+        self.H = df.Function(self.hydro.V_phi).project(H)
+        self.S = self.B + self.H
