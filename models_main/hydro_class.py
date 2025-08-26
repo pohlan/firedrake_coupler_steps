@@ -132,7 +132,7 @@ class GLADS(object):
         # F_Q     = df.avg((dQ-abs(Q))*p)*df.dS + (dQ-abs(Q))*p*df.ds
 
         # boundary conditions
-        self.bcs = [df.DirichletBC(self.V.sub(0), df.Constant(0.0), 1)] # id =1 --> left boundary
+        self.bcs = [df.DirichletBC(self.V.sub(0), rho_w*g*B, 1)] # id =1 --> left boundary
 
     def set_timestep(self, dt_):
         self.dt.assign(dt_)

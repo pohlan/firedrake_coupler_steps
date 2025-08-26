@@ -1,3 +1,5 @@
+import os
+os.environ['OMP_NUM_THREADS'] = '1'
 import firedrake as df
 from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
@@ -6,19 +8,22 @@ import models_main.helpers as hlp
 import numpy as np
 import pandas as pd
 
-import rasterio as rio
+# import rasterio as rio
+# from scipy.ndimage import gaussian_filter
+import geoutils as gu
 from firedrake.__future__ import interpolate
 
 s_per_day = 3600 * 24
 results_dir = 'step_10b/results/'
 data_dir    = 'step_10b/data/'
 
-m          = 1.158e-9
+m          = 1.158e-6
 e_v        = 1e-3
 
 # mesh
 # mesh_file = data_dir+'western_med_v2.msh'
 mesh_file = 'step_8/data/russel.msh'
+# mesh_file = data_dir+"gorner.msh"
 mesh = df.Mesh(mesh_file)
 
 # time stepping
@@ -36,22 +41,36 @@ meshx = X.dat.data_ro[:,0]
 meshy = X.dat.data_ro[:,1]
 B = df.Function(V)
 H = df.Function(V)
-with rio.open(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed") as src:
-    B.dat.data[:] = np.array([pnt[0] for pnt in src.sample(zip(meshx, meshy))])
-with rio.open(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness") as src:
-    H.dat.data[:] = np.array([pnt[0] for pnt in src.sample(zip(meshx, meshy))])
-chk_file    = 'step_10b/data/fenics_geom.h5'
-with CheckpointFile(chk_file, 'r') as afile:
-    mesh_ = afile.load_mesh()
+
+r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth.nc")
+B.dat.data[:] = r_bed.interp_points((meshx, meshy))
+r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth.nc")
+H.dat.data[:] = r_thk.interp_points((meshx, meshy))
+
+# r_bed = gu.Raster("step_10b/data/07_GlacierBed_SGI/B56-07_GlacierBed.tif")
+# B.dat.data[:] = r_bed.interp_points((meshx, meshy))
+# # B.interpolate(df.max_value(B, 2300))
+# r_thk = gu.Raster("step_10b/data/04_IceThickness_SGI/B56-07_IceThickness.tif")
+# H.dat.data[:] = r_thk.interp_points((meshx, meshy))
+
+# chk_file    = 'step_10b/data/fenics_geom.h5'
+# with CheckpointFile(chk_file, 'r') as afile:
+#     mesh_ = afile.load_mesh()
     # V_ = df.FunctionSpace(mesh_, "CG", 1)
     # B_ = df.Function(V_).interpolate(afile.load_function(mesh_, "B"))
     # H_ = df.Function(V_).interpolate(afile.load_function(mesh_, "H"))
-    B.interpolate(afile.load_function(mesh_, "B"))
-    H.interpolate(afile.load_function(mesh_, "H"))
+    # B.interpolate(afile.load_function(mesh_, "B"))
+    # H.interpolate(afile.load_function(mesh_, "H"))
 
 # df.project(B_, B)
 # df.project(H_, H)
 
+# make bed elevation and thickness the same at bc points of individual outlets
+bc_nodes = V.boundary_nodes(1)
+for i in range(0,len(bc_nodes),2):
+    nodes = bc_nodes[i:i+2]
+    B.vector()[nodes] = np.mean(B.vector()[nodes])
+    H.vector()[nodes] = np.mean(H.vector()[nodes])
 
 # set subdomain id to 1 where hydro dirichlet bcs should be applied applied
 # Vdiv           = df.FunctionSpace(mesh, "HDiv Trace", 0)   # trace elements
@@ -90,25 +109,34 @@ N   = df.Function(coupler.Q_cg)
 
 # set geometries and variables
 coupler.set_geometry(B, H)
+hlp.plot_geometry(coupler.B, coupler.H, mesh)
 stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=e_v) #, h_r=0.1, k_c=1e-1, k_s=5e-3, l_c=2.0)
-stokes.build_forms(beta2=1e6, q=1.0, p=1.0, Nhat=Nhat, Uhat=Uhat)
-hlp.plot_geometry(coupler.B, coupler.H, mesh)
+hydro.build_forms(m, dt0=dt0, e_v=e_v) #, h_r=0.1, k_c=0.05, k_s=5e-4, l_c=10.0)
+stokes.build_forms(beta2=1e6, q=0.5, p=0.5, Nhat=Nhat, Uhat=Uhat)
 
 x, y = df.SpatialCoordinate(mesh)
-hydro.set_initial_S(0.001)
+# hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
 # hydro.set_initial_phi(0.0)
+# hydro.set_initial_S(0.1)
+chk_file = results_dir + "initial_fields_russel_high_melt.h5"
+csv_file = results_dir + "initial_S_russel_high_melt.csv"
+with CheckpointFile(chk_file, 'r') as afile:
+    mesh_ = afile.load_mesh()
+    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+    hydro.set_initial_h(afile.load_function(mesh_, "h"))
+hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
+
 
 solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_type":"newtonls",
                  "pc_factor_mat_solver_type": "mumps", # ?
                  "snes_rtol": 1e-3,
                  "snes_atol": 1e0,
-                 "snes_max_it": 100,
+                 "snes_max_it": 120,
                  "report": True,
                  "snes_monitor": None,
                  "error_on_nonconvergence": True}
@@ -127,23 +155,29 @@ while (t <= t_end):
     try:
 
         df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
-        # df.solve(coupler.R == 0, coupler.U, solver_parameters=solver_params)
         f_N.write(N.interpolate(hydro.N))
         hydro.update_time_variables()
         t += dt
         hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
-        hydro.write_variables_pvd(t)
-        stokes.write_variables_pvd(t)
-        # if int(t*365) >= d+10:
-        #     d = int(t*365)
-        #     print(d)
-        #     hydro.write_variables_pvd(t)
-        #     stokes.write_variables_pvd(t)
+        # hydro.write_variables_pvd(t)
+        # stokes.write_variables_pvd(t)
+        if int(t*365) >= d+10:
+            d = int(t*365)
+            hydro.write_variables_pvd(t)
+            stokes.write_variables_pvd(t)
 
     except df.exceptions.ConvergenceError:
+        coupler.U.sub(0).assign(hydro.phi0)
+        coupler.U.sub(1).assign(hydro.h0)
+        coupler.U.sub(2).assign(hydro.S0)
         # If solver fails, try again with a smaller time step
         hydro.dt.assign(dt*timestep_reduction_fraction)
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
+
+# save end states for future initialization
+# chk_file_save = results_dir + "initial_fields_russel_high_melt.h5"
+# csv_file_save = results_dir + "initial_S_russel_high_melt.csv"
+# hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
 hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, "russel")

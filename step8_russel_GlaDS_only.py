@@ -6,7 +6,7 @@ import models_main.helpers as hlp
 import numpy as np
 import pandas as pd
 
-import rasterio as rio
+import geoutils as gu
 from firedrake.__future__ import interpolate
 
 s_per_day = 3600 * 24
@@ -17,7 +17,8 @@ m          = 1e-8
 e_v        = 1e-3
 
 # mesh
-mesh = df.Mesh("russel.msh")
+mesh_file = 'step_8/data/russel.msh'
+mesh = df.Mesh(mesh_file)
 
 # time stepping
 dt0 = s_per_day*0.01
@@ -36,15 +37,24 @@ meshx = X.dat.data_ro[:,0]
 meshy = X.dat.data_ro[:,1]
 B = df.Function(hydro.V_phi)
 H = df.Function(hydro.V_phi)
-with rio.open(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed") as src:
-    B.dat.data[:] = np.array([pnt[0] for pnt in src.sample(zip(meshx, meshy))])
-with rio.open(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness") as src:
-    H.dat.data[:] = np.array([pnt[0] for pnt in src.sample(zip(meshx, meshy))])
+
+r_bed = gu.Raster("NETCDF:step_10b/data/BedMachineGreenland-v5.nc:bed")
+B.dat.data[:] = r_bed.interp_points((meshx, meshy))
+r_thk = gu.Raster("NETCDF:step_10b/data/BedMachineGreenland-v5.nc:thickness")
+H.dat.data[:] = r_thk.interp_points((meshx, meshy))
+
+# set minimum ice thickness to 10
+thklim = 0
+thklim = 10
+Htemp = H.vector().get_local()
+Htemp[Htemp<thklim] = thklim
+# Htemp[np.isnan(Htemp)] = thklim
+H.vector().set_local(Htemp)
 
 hydro.build_variables(m, dt0, H, B, e_v)
 hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
-par = {"snes_type": "vinewtonrsls",
+par = {"snes_type": "newtonls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
        "snes_atol": 1e-4,

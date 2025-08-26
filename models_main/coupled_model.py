@@ -198,7 +198,7 @@ class GLADS(object):
     def __init__(self,mesh, results_dir):
         self.mesh     = mesh
         E_phi         = df.FiniteElement("CG", mesh.ufl_cell(), 1)
-        E_h           = df.FiniteElement("CG", mesh.ufl_cell(),1)
+        E_h           = df.FiniteElement("DG", mesh.ufl_cell(),0)
         E_S           = df.FiniteElement("DGT", mesh.ufl_cell(),0)
         self.elements = [E_phi,E_h,E_S]
 
@@ -334,7 +334,7 @@ class GLADS(object):
         self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
 
         # boundary conditions
-        self.bcs = [df.DirichletBC(self.coupler.V.sub(4), df.Constant(0.0), 1)] # id =1 --> part of boundary at the terminus
+        self.bcs = [df.DirichletBC(self.coupler.V.sub(4), rho_w*g*B, 1)] # id =1 --> part of boundary at the terminus
 
     def set_timestep(self, dt_):
         self.dt.assign(dt_)

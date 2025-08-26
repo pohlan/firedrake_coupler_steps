@@ -78,35 +78,43 @@ Htemp[Htemp<thklim] = thklim
 # Htemp[np.isnan(Htemp)] = thklim
 H.vector().set_local(Htemp)
 
+# Convenience functions for calculating the N scale
+ones = df.Function(coupler.Q_cg)
+ones.vector()[:] = 1.
+area = df.assemble(ones*df.dx)
+H_mean = df.assemble(H*df.dx)/area
+Uhat   = df.Constant(50)
+Nhat   = df.Constant(917*9.81*H_mean)
+
 # set geometries and variables
 coupler.set_geometry(B, H)
 stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=e_v, h_r=6.0, k_c=1e-3)
-stokes.build_forms(beta2=100)
+hydro.build_forms(m, dt0=dt0, e_v=e_v)
+stokes.build_forms(beta2=1e6, q=1.0, p=1.0, Nhat=Nhat, Uhat=Uhat)
 hlp.plot_geometry(coupler.B, coupler.H, mesh)
 
 # for initial state, take steady state solution from a different run
 # chk_file    = "step_4/initial_fields_A6.h5"
 # csv_file    = "step_4/initial_S_A6.csv"
-chk_file    = "step_5/initial_fields_E1.h5"
-csv_file    = "step_5/initial_S_E1.csv"
-with CheckpointFile(chk_file, 'r') as afile:
-    mesh_ = afile.load_mesh()
-    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
-    hydro.set_initial_h(afile.load_function(mesh_, "h"))
-hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
+# chk_file    = "step_5/initial_fields_E1.h5"
+# csv_file    = "step_5/initial_S_E1.csv"
+# with CheckpointFile(chk_file, 'r') as afile:
+#     mesh_ = afile.load_mesh()
+    # hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+#     hydro.set_initial_h(afile.load_function(mesh_, "h"))
+# hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 # hydro.set_initial_S(10 * np.random.rand(len(coupler.U.sub(2).vector()[:])))
 # hydro.set_initial_S(20*(1-x/100e3))
+hydro.set_initial_phi(0.0)
 
-
-solver_params = {"snes_type": "vinewtonrsls",#newton
+solver_params = {"snes_type": "newtonls",#newton
                  "pc_factor_mat_solver_type": "mumps", # ?
-                 "snes_rtol": 1e-2,
-                 "snes_atol": 1e-2,
-                 "snes_max_it": 300,
+                 "snes_rtol": 1e-5,
+                 "snes_atol": 1e-4,
+                 "snes_max_it": 1000,
                  "report": True,
                  "snes_monitor": None,
                  "error_on_nonconvergence": True}
