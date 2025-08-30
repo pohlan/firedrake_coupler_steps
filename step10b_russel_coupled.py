@@ -13,25 +13,31 @@ import pandas as pd
 import geoutils as gu
 from firedrake.__future__ import interpolate
 
-s_per_day = 3600 * 24
+s_per_hour = 3600
+s_per_day  = s_per_hour * 24
 results_dir = 'step_10b/results/'
-data_dir    = 'step_10b/data/'
+data_dir    = 'Greenland_data/'
 
-m          = 1.158e-6
-e_v        = 1e-3
+# m          = 3e-13
+# seasonal   = False
+e_v        = 3e-4
 
 # mesh
 # mesh_file = data_dir+'western_med_v2.msh'
-mesh_file = 'step_8/data/russel.msh'
+mesh_file = data_dir+'russel/russel.msh'
 # mesh_file = data_dir+"gorner.msh"
 mesh = df.Mesh(mesh_file)
 
 # time stepping
 dt0 = 0.01/365
-dt_max = 12/365
+dt_max = 20/365
 dt_min = 1e-3/365
-timestep_increase_fraction = 1.01
+timestep_increase_fraction = 1.05
 timestep_reduction_fraction = 0.5
+day = 1/365
+hour = day/24
+def get_dt(m):
+    return max(10*hour, 30*hour + hour*(5-15)/(30-1e-4) * (m-1e-4))
 
 # geometry
 V = df.FunctionSpace(mesh, "CG", 1)
@@ -47,52 +53,48 @@ B.dat.data[:] = r_bed.interp_points((meshx, meshy))
 r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth.nc")
 H.dat.data[:] = r_thk.interp_points((meshx, meshy))
 
-# r_bed = gu.Raster("step_10b/data/07_GlacierBed_SGI/B56-07_GlacierBed.tif")
-# B.dat.data[:] = r_bed.interp_points((meshx, meshy))
-# # B.interpolate(df.max_value(B, 2300))
-# r_thk = gu.Raster("step_10b/data/04_IceThickness_SGI/B56-07_IceThickness.tif")
-# H.dat.data[:] = r_thk.interp_points((meshx, meshy))
-
-# chk_file    = 'step_10b/data/fenics_geom.h5'
-# with CheckpointFile(chk_file, 'r') as afile:
-#     mesh_ = afile.load_mesh()
-    # V_ = df.FunctionSpace(mesh_, "CG", 1)
-    # B_ = df.Function(V_).interpolate(afile.load_function(mesh_, "B"))
-    # H_ = df.Function(V_).interpolate(afile.load_function(mesh_, "H"))
-    # B.interpolate(afile.load_function(mesh_, "B"))
-    # H.interpolate(afile.load_function(mesh_, "H"))
-
-# df.project(B_, B)
-# df.project(H_, H)
-
-# make bed elevation and thickness the same at bc points of individual outlets
-bc_nodes = V.boundary_nodes(1)
-for i in range(0,len(bc_nodes),2):
-    nodes = bc_nodes[i:i+2]
-    B.vector()[nodes] = np.mean(B.vector()[nodes])
-    H.vector()[nodes] = np.mean(H.vector()[nodes])
-
-# set subdomain id to 1 where hydro dirichlet bcs should be applied applied
-# Vdiv           = df.FunctionSpace(mesh, "HDiv Trace", 0)   # trace elements
-# exterior_nodes = Vdiv.boundary_nodes('on_boundary')
-# H_div          = df.Function(Vdiv).interpolate(H)          # ice thickness on trace elements
-# B_div          = df.Function(Vdiv).interpolate(B)
-# edgefunc       = df.Function(Vdiv)                         # function that will hold 1 where bc should be applied, 0 elsewhere
-# edgefunc.vector()[exterior_nodes] = (H_div.vector()[exterior_nodes] < 80) # * (B_div.vector()[exterior_nodes] < 200)
-# mesh     = df.RelabeledMesh(mesh, [edgefunc], [1])
-
 # set minimum ice thickness to 10
 thklim = 0
 thklim = 10
 Htemp = H.vector().get_local()
 Htemp[Htemp<thklim] = thklim
-# Htemp[np.isnan(Htemp)] = thklim
 H.vector().set_local(Htemp)
+
+# make bed elevation and thickness the same at bc points of individual outlets
+# bc_nodes = V.boundary_nodes(1)
+# for i in range(0,len(bc_nodes),2):
+#     nodes = bc_nodes[i:i+2]
+#     B.vector()[nodes] = np.mean(B.vector()[nodes])
+#     H.vector()[nodes] = np.mean(H.vector()[nodes])
 
 # initiate classes with updated mesh
 hydro   = GLADS(mesh, results_dir)
 stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler(mesh, stokes, hydro)
+
+# melt input to hydro model
+print("Interpolating melt rates, taking a while..")
+r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
+delta = r.res[0]*2
+r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
+year_0  = 2016 - 1940 # starts in 1940
+n_years = 6
+b_0 = year_0*12
+b_end = b_0 + n_years*12
+i_months = range(b_0,b_end+1)
+mm = df.Function(V)
+f_melt = VTKFile(results_dir+"m0_per_year.pvd")
+melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
+for (n,i) in enumerate(i_months):
+    print(n)
+    mm.vector()[:] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
+    # f_melt.write(mm, time=n)
+    melt[:,n] = mm.vector()[:]
+seasonal = True
+print("... done")
+# first time step:
+m = df.Function(V)
+m.vector()[:] = melt[:,0]
 
 # Convenience functions for calculating the N scale
 ones = df.Function(coupler.Q_cg)
@@ -114,7 +116,7 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=e_v) #, h_r=0.1, k_c=0.05, k_s=5e-4, l_c=10.0)
+hydro.build_forms(m, dt0=dt0, e_v=e_v, h_r=2, k_c=5e-3, k_s=1e-3, l_c=10.0, l_r=40)
 stokes.build_forms(beta2=1e6, q=0.5, p=0.5, Nhat=Nhat, Uhat=Uhat)
 
 x, y = df.SpatialCoordinate(mesh)
@@ -122,8 +124,8 @@ x, y = df.SpatialCoordinate(mesh)
 # hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.1)
-chk_file = results_dir + "initial_fields_russel_high_melt.h5"
-csv_file = results_dir + "initial_S_russel_high_melt.csv"
+chk_file = results_dir + "initial_fields_russel_base_melt.h5"
+csv_file = results_dir + "initial_S_russel_base_melt.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -144,39 +146,59 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
 # time stepping and solve
 t     = 0.0
 d     = 0    # count the days
-t_end = 6
-while (t <= t_end):
-    dt = float(hydro.dt.values()[0])
-    # dt = t_end
-    print(f"Time = {t} years, dt = {dt*365} days")
-    if dt < dt_min:
-        print("Minimal time step reached. Simulation failed.")
-        break
-    try:
+t_end = 0.5
 
-        df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
-        f_N.write(N.interpolate(hydro.N))
-        hydro.update_time_variables()
-        t += dt
-        hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
-        # hydro.write_variables_pvd(t)
-        # stokes.write_variables_pvd(t)
-        if int(t*365) >= d+10:
-            d = int(t*365)
-            hydro.write_variables_pvd(t)
-            stokes.write_variables_pvd(t)
+with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
+    afile.save_mesh(mesh)
+    i     = 1    # idx for checkpointing
 
-    except df.exceptions.ConvergenceError:
-        coupler.U.sub(0).assign(hydro.phi0)
-        coupler.U.sub(1).assign(hydro.h0)
-        coupler.U.sub(2).assign(hydro.S0)
-        # If solver fails, try again with a smaller time step
-        hydro.dt.assign(dt*timestep_reduction_fraction)
-        print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
+    while (t <= t_end):
+        dt = float(hydro.dt.values()[0])
+        # dt = t_end
+        print(np.max(hydro.m.vector()[:]))
+        print(f"Time = {t} years, dt = {dt*365} days")
+        if dt < dt_min:
+            print("Minimal time step reached. Simulation failed.")
+            break
+        try:
+            if seasonal:
+                month = t*12
+                month_floor = int(np.floor(month))
+                month_ceil = int(np.ceil(month))
+                floor_weight = month_ceil - month
+                ceil_weight = month - month_floor
+                hydro.m.vector()[:] = melt[:,month_floor]*floor_weight + melt[:,month_ceil]*ceil_weight
+                mm.interpolate(hydro.m)
+                f_melt.write(mm, time=t)
+
+            df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
+            f_N.write(N.interpolate(hydro.N))
+            hydro.update_time_variables()
+            t += dt
+            hydro.dt.assign(get_dt(np.max(hydro.m.vector()[:])))
+            # hydro.write_variables_pvd(t)
+            # stokes.write_variables_pvd(t)
+            if int(t*365) >= d+2:
+                d = int(t*365)
+                hydro.write_variables_pvd(t)
+                stokes.write_variables_pvd(t)
+                afile.save_function(stokes.Us, idx=i, name="Us")
+                afile.save_function(stokes.Ub, idx=i, name="Ub")
+                afile.save_function(coupler.U.sub(4), idx=i, name="phi")
+                afile.save_function(coupler.U.sub(5), idx=i, name="h")
+                i += 1
+
+        except df.exceptions.ConvergenceError:
+            coupler.U.sub(0).assign(hydro.phi0)
+            coupler.U.sub(1).assign(hydro.h0)
+            coupler.U.sub(2).assign(hydro.S0)
+            # If solver fails, try again with a smaller time step
+            hydro.dt.assign(dt*timestep_reduction_fraction)
+            print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # save end states for future initialization
-# chk_file_save = results_dir + "initial_fields_russel_high_melt.h5"
-# csv_file_save = results_dir + "initial_S_russel_high_melt.csv"
+# chk_file_save = results_dir + "initial_fields_russel_base_melt.h5"
+# csv_file_save = results_dir + "initial_S_russel_base_melt.csv"
 # hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)

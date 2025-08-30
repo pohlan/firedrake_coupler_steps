@@ -250,7 +250,7 @@ class GLADS(object):
         e_v   = df.Constant(e_v)
 
         # source term
-        m            = df.Constant(m*s_per_year)
+        m = self.m = df.Function(self.V_phi).interpolate(m)
 
         # initial time step
         dt = self.dt = df.Constant(dt0)
@@ -345,8 +345,8 @@ class GLADS(object):
         self.S0.assign(self.coupler.U.sub(6))
 
     def write_variables_pvd(self,t):
-        self.outfile_phi.write(df.project(self.coupler.U.sub(4), self.V_phi, name="phi"))
-        self.outfile_h.write(df.project(self.coupler.U.sub(5), self.V_h, name="h"))
+        self.outfile_phi.write(df.project(self.coupler.U.sub(4), self.V_phi, name="phi"), time=t)
+        self.outfile_h.write(df.project(self.coupler.U.sub(5), self.V_h, name="h"), time=t)
 
     def save_end_state(self, chk_file, csv_file):
         with CheckpointFile(chk_file, 'w') as afile:
