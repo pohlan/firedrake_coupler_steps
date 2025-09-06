@@ -189,6 +189,13 @@ step_*/
 *.nc
 *.zip
 SHMIP_results/
+*.h5
+Greenland_data/
+*.csv
+
 # plots
 *.jpg
 *.png
+
+# input files within run_xx folders
+input*.sh

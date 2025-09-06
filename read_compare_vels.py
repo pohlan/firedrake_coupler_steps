@@ -13,7 +13,7 @@ from firedrake.checkpointing import CheckpointFile
 from datetime import datetime, timedelta
 import re
 
-n_idx = 81
+n_idx = 1050
 
 # load model files
 with CheckpointFile("step_10b/results/time_series.h5", 'r') as afile:
@@ -64,26 +64,26 @@ for (i,f) in enumerate(sorted_files[:n_months]):
     r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
     Us_obs[:,i] = r.interp_points((meshx,meshy))
 
-def plot_vel(k):
-    B = df.Function(V)
-    B.vector()[:] = Us_obs[:,k]
-    fig, axes = plt.subplots()
-    cl = tripcolor(B, axes=axes)
-    axes.set_title(f"{sorted_dates[k]}")
-    fig.colorbar(cl)
-    plt.savefig("B.jpg")
-k = 56
-plot_vel(k)
+# def plot_vel(k):
+#     B = df.Function(V)
+#     B.vector()[:] = Us_obs[:,k]
+#     fig, axes = plt.subplots()
+#     cl = tripcolor(B, axes=axes)
+#     axes.set_title(f"{sorted_dates[k]}")
+#     fig.colorbar(cl)
+#     plt.savefig("B.jpg")
+# k = 56
+# plot_vel(k)
 
 
 # xi, yi = -206185, -2.49758e6
-xi, yi = -218312.472667319,-2514023.04736881
+# xi, yi = -218312.472667319,-2514023.04736881
 xi, yi = -215217.697420904,-2510443.87251861
-xi, yi = -203042.0,-2507072.0
-xi, yi = -192320.0,-2508747.0
+# xi, yi = -203042.0,-2507072.0
+# xi, yi = -192320.0,-2508747.0
 p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
 plt.figure()
-plt.plot(dates_model, Us_model[p,1:], label="model")
+plt.plot(dates_model[:-1], Us_model[p,1:], label="model")
 plt.plot(sorted_dates[:n_months], Us_obs[p,:], label="obs")
 plt.legend()
 plt.savefig("B.jpg")

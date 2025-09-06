@@ -3,7 +3,7 @@ import numpy as np
 import fiona
 import matplotlib.pyplot as plt
 
-data_dir = '/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/step_8/data/'
+data_dir = "/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/Greenland_data/russel/"
 
 # shp = fiona.open(f"{data_dir}russel_domain.gpkg", mode="r")
 shp = fiona.open(f"{data_dir}russel_domain_large.gpkg", mode="r")
@@ -40,7 +40,7 @@ plane = geometry.add_plane_surface([face])
 # physical_line = geometry.add_physical_group(1, np.concatenate([lines[0:10], lines[20:-47],lines[-40:-28],lines[-14:]]))
 
 # large from hydrological outlet points
-hydro_file = "/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/step_10b/data/hydrological_outlets_russel.gpkg"
+hydro_file = f"{data_dir}hydrological_outlets_russel.gpkg"
 hydro_points = fiona.open(hydro_file, mode="r")
 hydro_coords = np.array([i['geometry']['coordinates'] for i in list(hydro_points.values())])
 print(len(hydro_coords))

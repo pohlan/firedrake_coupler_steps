@@ -15,21 +15,21 @@ from firedrake.__future__ import interpolate
 
 s_per_hour = 3600
 s_per_day  = s_per_hour * 24
-results_dir = 'step_10b/results/'
-data_dir    = 'Greenland_data/'
+
+args = hlp.get_args()   # command line arguments
+
+data_dir    = args.data_directory
+results_dir = args.results_directory+"/run_{}/".format(args.run_index)
+params_output_file = args.results_directory+"parameter_runs.csv"
 
 # m          = 3e-13
 # seasonal   = False
-e_v        = 3e-4
 
 # mesh
-# mesh_file = data_dir+'western_med_v2.msh'
 mesh_file = data_dir+'russel/russel.msh'
-# mesh_file = data_dir+"gorner.msh"
 mesh = df.Mesh(mesh_file)
 
 # time stepping
-dt0 = 0.01/365
 dt_max = 20/365
 dt_min = 1e-3/365
 timestep_increase_fraction = 1.05
@@ -37,7 +37,7 @@ timestep_reduction_fraction = 0.5
 day = 1/365
 hour = day/24
 def get_dt(m):
-    return max(10*hour, 30*hour + hour*(5-15)/(30-1e-4) * (m-1e-4))
+    return max(2.0*hour, 20*hour + hour*(2.0-20)/(15-1e-14) * (m-1e-14))
 
 # geometry
 V = df.FunctionSpace(mesh, "CG", 1)
@@ -73,25 +73,39 @@ stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler(mesh, stokes, hydro)
 
 # melt input to hydro model
-print("Interpolating melt rates, taking a while..")
-r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
-delta = r.res[0]*2
-r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
-year_0  = 2016 - 1940 # starts in 1940
-n_years = 6
-b_0 = year_0*12
-b_end = b_0 + n_years*12
-i_months = range(b_0,b_end+1)
+# print("Interpolating melt rates, taking a while..")
+# r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
+# delta = r.res[0]*2
+# r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
+# year_0  = 2016 - 1940 # starts in 1940
+# n_years = 6
+# b_0 = year_0*12
+# b_end = b_0 + n_years*12
+# i_months = range(b_0,b_end+1)
 mm = df.Function(V)
 f_melt = VTKFile(results_dir+"m0_per_year.pvd")
-melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
-for (n,i) in enumerate(i_months):
-    print(n)
-    mm.vector()[:] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
-    # f_melt.write(mm, time=n)
-    melt[:,n] = mm.vector()[:]
+# melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
+# for (n,i) in enumerate(i_months):
+#     print(n)
+#     mm.vector()[:] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
+#     # f_melt.write(mm, time=n)
+#     melt[:,n] = mm.vector()[:]
+# seasonal = True
+# print("... done")
+
+# fenics melt water input
 seasonal = True
-print("... done")
+melt = np.zeros((len(H.vector()[:]), 12))
+for i in range(12):
+    fenics_smb_file = f"Greenland_data/russel/SMB_fenics/SMB_{i}.h5"
+    with CheckpointFile(fenics_smb_file, 'r') as afile:
+        mesh_ = afile.load_mesh()
+        V_ = df.FunctionSpace(mesh_, "CG", 1)
+        # B_ = df.Function(V_).interpolate(afile.load_function(mesh_, "B"))
+        # H_ = df.Function(V_).interpolate(afile.load_function(mesh_, "H"))
+        SMB_ = df.Function(V).interpolate(afile.load_function(mesh_, "SMB"))
+        melt[:,i] = SMB_.vector()[:]
+
 # first time step:
 m = df.Function(V)
 m.vector()[:] = melt[:,0]
@@ -116,16 +130,16 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=e_v, h_r=2, k_c=5e-3, k_s=1e-3, l_c=10.0, l_r=40)
-stokes.build_forms(beta2=1e6, q=0.5, p=0.5, Nhat=Nhat, Uhat=Uhat)
+hydro.build_forms(m, dt0=get_dt(max(melt[:,0])), e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r)
+stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
 
 x, y = df.SpatialCoordinate(mesh)
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.1)
-chk_file = results_dir + "initial_fields_russel_base_melt.h5"
-csv_file = results_dir + "initial_S_russel_base_melt.csv"
+chk_file = args.data_directory + "russel/initial_fields_russel_base_melt.h5"
+csv_file = args.data_directory + "russel/initial_S_russel_base_melt.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -138,36 +152,37 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
                  "pc_factor_mat_solver_type": "mumps", # ?
                  "snes_rtol": 1e-3,
                  "snes_atol": 1e0,
-                 "snes_max_it": 120,
+                 "snes_max_it": 50,
                  "report": True,
                  "snes_monitor": None,
                  "error_on_nonconvergence": True}
 
 # time stepping and solve
-t     = 0.0
-d     = 0    # count the days
-t_end = 0.5
-
+t       = 0.0
+d       = 0    # count the days
+t_end   = 10
+success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)
     i     = 1    # idx for checkpointing
 
     while (t <= t_end):
         dt = float(hydro.dt.values()[0])
-        # dt = t_end
         print(np.max(hydro.m.vector()[:]))
-        print(f"Time = {t} years, dt = {dt*365} days")
+        print("Time = {:.2f} years, dt = {:.1f} hours".format(t, dt*365*24))
         if dt < dt_min:
+            # write failure to table
+            success = False
             print("Minimal time step reached. Simulation failed.")
             break
         try:
             if seasonal:
-                month = t*12
+                month = (t%1)*12
                 month_floor = int(np.floor(month))
                 month_ceil = int(np.ceil(month))
                 floor_weight = month_ceil - month
                 ceil_weight = month - month_floor
-                hydro.m.vector()[:] = melt[:,month_floor]*floor_weight + melt[:,month_ceil]*ceil_weight
+                hydro.m.vector()[:] = melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
                 mm.interpolate(hydro.m)
                 f_melt.write(mm, time=t)
 
@@ -175,9 +190,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             f_N.write(N.interpolate(hydro.N))
             hydro.update_time_variables()
             t += dt
-            hydro.dt.assign(get_dt(np.max(hydro.m.vector()[:])))
-            # hydro.write_variables_pvd(t)
-            # stokes.write_variables_pvd(t)
+            dt_max = get_dt(np.max(hydro.m.vector()[:]))
+            hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
             if int(t*365) >= d+2:
                 d = int(t*365)
                 hydro.write_variables_pvd(t)
@@ -189,12 +203,9 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 i += 1
 
         except df.exceptions.ConvergenceError:
-            coupler.U.sub(0).assign(hydro.phi0)
-            coupler.U.sub(1).assign(hydro.h0)
-            coupler.U.sub(2).assign(hydro.S0)
             # If solver fails, try again with a smaller time step
             hydro.dt.assign(dt*timestep_reduction_fraction)
-            print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
+            print("Convergence not achieved.  Reducing time step to {:.1f} hours and trying again".format(hydro.dt.values()[0]*365*24))
 
 # save end states for future initialization
 # chk_file_save = results_dir + "initial_fields_russel_base_melt.h5"
@@ -202,5 +213,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
 # hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, "russel")
+# hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, "russel")
 # hlp.scatterplt_fields(coupler.U.subfunctions[0:2], ["ubar_x", "ubar_y"], df.MixedElement(stokes.elements[0:2]), mesh, results_dir, "russel")
+
+# write parameters to table:
+hlp.save_params_to_csv(args, params_output_file, success=success)
