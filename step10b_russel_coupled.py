@@ -37,7 +37,7 @@ timestep_reduction_fraction = 0.5
 day = 1/365
 hour = day/24
 def get_dt(m):
-    return max(2.0*hour, 20*hour + hour*(2.0-20)/(15-1e-14) * (m-1e-14))
+    return max(2.0*hour, 20*hour + hour*(2.0-20)/(10-1e-14) * (m-1e-14))
 
 # geometry
 V = df.FunctionSpace(mesh, "CG", 1)
@@ -73,38 +73,38 @@ stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler(mesh, stokes, hydro)
 
 # melt input to hydro model
-# print("Interpolating melt rates, taking a while..")
-# r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
-# delta = r.res[0]*2
-# r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
-# year_0  = 2016 - 1940 # starts in 1940
-# n_years = 6
-# b_0 = year_0*12
-# b_end = b_0 + n_years*12
-# i_months = range(b_0,b_end+1)
+print("Interpolating melt rates, taking a while..")
+r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
+delta = r.res[0]*2
+r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
+year_0  = 2016 - 1940 # starts in 1940
+n_years = 6
+b_0 = year_0*12
+b_end = b_0 + n_years*12
+i_months = range(b_0,b_end+1)
 mm = df.Function(V)
 f_melt = VTKFile(results_dir+"m0_per_year.pvd")
-# melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
-# for (n,i) in enumerate(i_months):
-#     print(n)
-#     mm.vector()[:] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
-#     # f_melt.write(mm, time=n)
-#     melt[:,n] = mm.vector()[:]
-# seasonal = True
-# print("... done")
+melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
+for (n,i) in enumerate(i_months):
+    print(n)
+    mm.vector()[:] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
+    # f_melt.write(mm, time=n)
+    melt[:,n] = mm.vector()[:]
+seasonal = True
+print("... done")
 
 # fenics melt water input
-seasonal = True
-melt = np.zeros((len(H.vector()[:]), 12))
-for i in range(12):
-    fenics_smb_file = f"Greenland_data/russel/SMB_fenics/SMB_{i}.h5"
-    with CheckpointFile(fenics_smb_file, 'r') as afile:
-        mesh_ = afile.load_mesh()
-        V_ = df.FunctionSpace(mesh_, "CG", 1)
-        # B_ = df.Function(V_).interpolate(afile.load_function(mesh_, "B"))
-        # H_ = df.Function(V_).interpolate(afile.load_function(mesh_, "H"))
-        SMB_ = df.Function(V).interpolate(afile.load_function(mesh_, "SMB"))
-        melt[:,i] = SMB_.vector()[:]
+# seasonal = True
+# melt = np.zeros((len(H.vector()[:]), 12))
+# for i in range(12):
+#     fenics_smb_file = f"Greenland_data/russel/SMB_fenics/SMB_{i}.h5"
+#     with CheckpointFile(fenics_smb_file, 'r') as afile:
+#         mesh_ = afile.load_mesh()
+#         V_ = df.FunctionSpace(mesh_, "CG", 1)
+#         # B_ = df.Function(V_).interpolate(afile.load_function(mesh_, "B"))
+#         # H_ = df.Function(V_).interpolate(afile.load_function(mesh_, "H"))
+#         SMB_ = df.Function(V).interpolate(afile.load_function(mesh_, "SMB"))
+#         melt[:,i] = SMB_.vector()[:]
 
 # first time step:
 m = df.Function(V)
@@ -160,7 +160,7 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
 # time stepping and solve
 t       = 0.0
 d       = 0    # count the days
-t_end   = 10
+t_end   = 5
 success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)
@@ -177,12 +177,12 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             break
         try:
             if seasonal:
-                month = (t%1)*12
+                month = t*12
                 month_floor = int(np.floor(month))
                 month_ceil = int(np.ceil(month))
                 floor_weight = month_ceil - month
                 ceil_weight = month - month_floor
-                hydro.m.vector()[:] = melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
+                hydro.m.vector()[:] = melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
                 mm.interpolate(hydro.m)
                 f_melt.write(mm, time=t)
 

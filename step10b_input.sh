@@ -20,7 +20,7 @@ k_s=0.05
 k_c=0.5
 l_c=10
 beta2=1e6
-p=0.5
+p=1.0
 q=0.5
 
 # run the model

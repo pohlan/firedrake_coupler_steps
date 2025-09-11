@@ -13,10 +13,12 @@ from firedrake.checkpointing import CheckpointFile
 from datetime import datetime, timedelta
 import re
 
-n_idx = 1050
+run_index = 10
+
+n_idx = 750
 
 # load model files
-with CheckpointFile("step_10b/results/time_series.h5", 'r') as afile:
+with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as afile:
     mesh = afile.load_mesh()
     V = df.FunctionSpace(mesh, "CG", 1)
     v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
@@ -76,20 +78,34 @@ for (i,f) in enumerate(sorted_files[:n_months]):
 # plot_vel(k)
 
 
-# xi, yi = -206185, -2.49758e6
-# xi, yi = -218312.472667319,-2514023.04736881
-xi, yi = -215217.697420904,-2510443.87251861
-# xi, yi = -203042.0,-2507072.0
-# xi, yi = -192320.0,-2508747.0
-p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
+coords = [[-223885, -2.49326e6],
+          [-205468, -2.49596e6],
+          [-225130, -2.50269e6],
+          [-216304, -2.50337e6],
+          [-218312.472667319,-2514023.04736881],
+          [-215217.697420904,-2510443.87251861],
+          [-203042.0,-2507072.0],
+          [-192320.0,-2508747.0]]
+
+plt.figure(figsize=(12,12))
+for (i,(xi,yi)) in enumerate(coords):
+    p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
+    ax = plt.subplot(4,2,i+1)
+    plt.plot(dates_model[:-1], Us_model[p,1:], label="model")
+    plt.plot(sorted_dates[:n_months], Us_obs[p,:], label="obs")
+    plt.title(f"{i}")
+    plt.legend()
+plt.savefig(f"parameter_runs/plots/run_{run_index}.jpg")
+
+# plot map
+x0, xend = -2.35e5,-1.75e5
+y0, yend = -2.55e6, -2.488e6
+backg = gu.Raster(f"{vel_dir}{files[0]}")
+delta = backg.res[0]*2
+backg.crop([x0, y0, xend, yend], inplace=True)
 plt.figure()
-plt.plot(dates_model[:-1], Us_model[p,1:], label="model")
-plt.plot(sorted_dates[:n_months], Us_obs[p,:], label="obs")
-plt.legend()
-plt.savefig("B.jpg")
-
-
-
-
-
-
+backg.plot()
+for(i,(x_crd,y_crd)) in enumerate(coords):
+    plt.scatter([x_crd],[y_crd], color="black")
+    plt.annotate(text=f"{i}", xy=(x_crd+5e2,y_crd+5e2), fontsize=14)
+plt.savefig(f"parameter_runs/plots/map.jpg")
