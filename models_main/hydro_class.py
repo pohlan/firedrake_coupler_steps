@@ -168,3 +168,136 @@ class GLADS(object):
         else:
             self.S0.interpolate(S0_)
         self.U.sub(2).assign(self.S0)
+
+
+class SHAKTI(object):
+    def __init__(self,mesh, results_dir):
+        self.mesh  = mesh
+        E_h_w      = df.FiniteElement("CG", mesh.ufl_cell(), 1)
+        E_h        = df.FiniteElement("CG", mesh.ufl_cell(),1)
+        E_K        = df.FiniteElement("CG", mesh.ufl_cell(),1)
+        self.E_V   = df.MixedElement([E_h_w,E_h, E_K])
+        self.V     = df.FunctionSpace(mesh,self.E_V)
+        self.V_h_w = df.FunctionSpace(mesh,E_h_w)
+        self.V_h   = df.FunctionSpace(mesh,E_h)
+
+        # create output files
+        self.results_dir = results_dir
+        self.outfile_h_w = VTKFile(results_dir+results_dir[:-1]+'_h_w.pvd')
+        self.outfile_h   = VTKFile(results_dir+results_dir[:-1]+'_h.pvd')
+        self.outfile_K   = VTKFile(results_dir+results_dir[:-1]+'_K.pvd')
+        self.outfile_N   = VTKFile(results_dir+results_dir[:-1]+'_N.pvd')
+        N_out            = df.Function(self.V_h_w)
+
+    def build_variables(self, m_, dt_, thik, bed, e_v_=0.0): # shmip_m[shmip_suit]
+        # constants
+        rho_i = df.Constant(910)      # kg / m^3
+        rho_w = df.Constant(1000)     # kg / m^3
+        g     = df.Constant(9.8)      # m / s^2
+        L     = df.Constant(334e3)    # J / kg -- latent heat of fusion
+        ct    = df.Constant(7.5e-8)   # K / Pa -- Clausius-Clapeyron constant
+        cw    = df.Constant(4220.0)   # J / kg / K -- specific heat capacity of water
+        h_r   = df.Constant(0.1)      # m
+        l_r   = df.Constant(2.0)      # m
+        nu    = df.Constant(1.787e-6) # m^2/s -- kinematic viscosity of water
+        omega = df.Constant(1e-3)     # - -- controlling nonlinear transition between laminar/turbulent
+        G     = df.Constant(0.0)     # W/m^2 -- geothermal heat flux
+        A     = df.Constant(5e-25)  # Pa^(-3) s^(-1)
+        n     = df.Constant(3)        # -
+
+        e_v   = df.Constant(e_v_)     # -
+        m     = self.m = df.Function(self.V_h_w) # m / s
+        m.interpolate(m_)
+
+        # initialize bed and ice surface
+        B = self.B = df.Function(self.V_h_w)
+        self.B.interpolate(bed)
+        H = self.H = df.Function(self.V_h_w)
+        self.H.interpolate(df.max_value(thik,0))
+
+        # trial and test functions
+        U  = self.U = df.Function(self.V)
+        h_w, h, K   = df.split(U)
+        xsi, psi, w = df.TestFunctions(self.V)
+
+        # initial fields, default
+        h_w0 = self.h_w0 = df.Function(self.V_h_w)
+        h_w0.interpolate(1e-4)
+        # h_w0.interpolate(0.1*H*rho_i/rho_w + B)
+        h0   = self.h0   = df.Function(self.V_h)
+        h0.interpolate(1e-2)
+        K0   = self.K0   = df.Function(self.V_h_w)
+        K0.interpolate(1e-2)
+
+        # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
+        U.sub(0).assign(h_w0)
+        U.sub(1).assign(h0)
+        U.sub(2).assign(K0)
+
+        # time step
+        dt = self.dt = df.Constant(dt_)
+
+        # physical equations #
+
+        # water pressure, hydraulic head and effective pressure
+        P_w = rho_w*g*(h_w-B)
+        N   = self.N = rho_i*g*H - P_w
+
+        # shear stress and sliding law
+        # S     = H + B       # surface elevation
+        tau_b = df.Constant(0.0) #  rho_i*g*H*S.dx(0)
+        # beta2 = 1e5
+        # u_b = tau_b/(N*beta2)
+        u_b = df.Constant(1e-6)
+
+        # flux
+        q = -K*df.grad(h_w)
+
+        # residual for calculating K
+        Re  = K*((df.dot(df.grad(h_w),df.grad(h_w))+1e-10)**0.5)/nu  # Reynolds number
+        R_K = w*(K - abs(h)**3*g/(12*nu*(1+omega*Re)))*df.dx
+
+        # opening and closure for sheets and channels
+        O   = df.max_value(u_b*(h_r - h)/l_r,0)
+        C   = A*h*abs(N)**(n-1)*N
+        M   = 1/L * (G + abs(tau_b*u_b) - rho_w*g*df.dot(q,df.grad(h_w)) - ct*cw*rho_w*df.dot(q,df.grad(P_w)))
+
+        R_phi_h = (xsi*e_v*(h_w-h_w0)/dt + df.dot(df.grad(xsi),K*df.grad(h_w)) + xsi * (O+M*(1/rho_i-1/rho_w)-C-m) ) * df.dx
+        R_h     = ((h - h0)/dt - O - M/rho_i + C) * psi * df.dx
+        self.F  = R_phi_h + R_h + R_K
+
+        # boundary conditions
+        self.bcs = [df.DirichletBC(self.V.sub(0), B, 1)] # id =1 --> left boundary
+
+    def set_timestep(self, dt_):
+        self.dt.assign(dt_)
+
+    def update_time_variables(self):
+        self.h_w0.assign(self.U.sub(0))
+        self.h0.assign(self.U.sub(1))
+        self.K0.assign(self.U.sub(2))
+
+    def write_variables_pvd(self,t):
+        self.outfile_h_w.write(df.project(self.U.sub(0), self.V_h_w, name="h_w"))
+        self.outfile_h.write(df.project(self.U.sub(1), self.V_h, name="h"))
+        self.outfile_K.write(df.project(self.U.sub(2), self.V_h_w, name="K"))
+        self.outfile_N.write(df.project(self.N, self.V_h_w, name="N"))
+
+    def save_end_state(self, chk_file):
+        with CheckpointFile(chk_file, 'w') as afile:
+            afile.save_mesh(self.mesh)  # optional
+            afile.save_function(self.U.sub(0), name="h_w")
+            afile.save_function(self.U.sub(1), name="h")
+            afile.save_function(self.U.sub(2), name="K")
+
+    # for choosing different initial values than the default
+    # has to be given as an expression not an array
+    def set_initial_h_w(self,h_w0_):
+        self.h_w0.interpolate(h_w0_)
+        self.U.sub(0).assign(self.h_w0)
+    def set_initial_h(self,h0_):
+        self.h0.interpolate(h0_)
+        self.U.sub(1).assign(self.h0)
+    def set_initial_K(self,K0_):
+        self.K0.interpolate(K0_)
+        self.U.sub(2).assign(self.K0)

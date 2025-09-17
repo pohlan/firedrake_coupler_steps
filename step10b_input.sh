@@ -4,7 +4,7 @@
 target_directory='parameter_runs/'
 
 # determine the number of already started runs by counting the number of directories, than add 1 to get new run_index
-num_directories=$(find "$target_directory" -maxdepth 1 -mindepth 1 -type d | wc -l)
+num_directories=$(find "$target_directory" -maxdepth 1 -mindepth 1 -type d -name "run_*" | wc -l)
 run_index=$((num_directories+1))
 
 # make a new directory and copy this file so that the input parameters are recorded at the start of the simulation

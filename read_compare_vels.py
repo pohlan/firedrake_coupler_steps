@@ -87,13 +87,14 @@ coords = [[-223885, -2.49326e6],
           [-203042.0,-2507072.0],
           [-192320.0,-2508747.0]]
 
-plt.figure(figsize=(12,12))
+plt.figure(figsize=(12,14))
 for (i,(xi,yi)) in enumerate(coords):
     p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
     ax = plt.subplot(4,2,i+1)
     plt.plot(dates_model[:-1], Us_model[p,1:], label="model")
     plt.plot(sorted_dates[:n_months], Us_obs[p,:], label="obs")
-    plt.title(f"{i}")
+    plt.title(f"{i}", pad=2.0)
+    plt.ylabel("Surface speed (m/yr)")
     plt.legend()
 plt.savefig(f"parameter_runs/plots/run_{run_index}.jpg")
 
