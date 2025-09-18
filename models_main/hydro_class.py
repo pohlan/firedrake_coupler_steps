@@ -180,6 +180,7 @@ class SHAKTI(object):
         self.V     = df.FunctionSpace(mesh,self.E_V)
         self.V_h_w = df.FunctionSpace(mesh,E_h_w)
         self.V_h   = df.FunctionSpace(mesh,E_h)
+        self.V_K   = df.FunctionSpace(mesh,E_K)
 
         # create output files
         self.results_dir = results_dir
@@ -222,11 +223,11 @@ class SHAKTI(object):
 
         # initial fields, default
         h_w0 = self.h_w0 = df.Function(self.V_h_w)
-        h_w0.interpolate(1e-4)
-        # h_w0.interpolate(0.1*H*rho_i/rho_w + B)
+        # h_w0.interpolate(1e-4)
+        h_w0.interpolate(0.01*H*rho_i/rho_w + B)
         h0   = self.h0   = df.Function(self.V_h)
-        h0.interpolate(1e-2)
-        K0   = self.K0   = df.Function(self.V_h_w)
+        h0.interpolate(1e-3)
+        K0   = self.K0   = df.Function(self.V_K)
         K0.interpolate(1e-2)
 
         # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
@@ -260,7 +261,7 @@ class SHAKTI(object):
         # opening and closure for sheets and channels
         O   = df.max_value(u_b*(h_r - h)/l_r,0)
         C   = A*h*abs(N)**(n-1)*N
-        M   = 1/L * (G + abs(tau_b*u_b) - rho_w*g*df.dot(q,df.grad(h_w)) - ct*cw*rho_w*df.dot(q,df.grad(P_w)))
+        M   = 1/L * (G + abs(tau_b*u_b) + rho_w*g*df.max_value(df.dot(q,df.grad(h_w)),1e-10) - ct*cw*rho_w*df.max_value(df.dot(q,df.grad(P_w)),-1e-4))
 
         R_phi_h = (xsi*e_v*(h_w-h_w0)/dt + df.dot(df.grad(xsi),K*df.grad(h_w)) + xsi * (O+M*(1/rho_i-1/rho_w)-C-m) ) * df.dx
         R_h     = ((h - h0)/dt - O - M/rho_i + C) * psi * df.dx

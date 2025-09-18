@@ -10,24 +10,47 @@ results_dir = 'step_11/'
 # mesh
 nx, ny = 75, 25
 Lx, Ly = 100e3, 20e3
-mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+# mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+mesh = df.Mesh("valley.msh")
 x, y = df.SpatialCoordinate(mesh)
 
 # shmip
-shmip_suit = "A6"
-shmip_m = {"A1" : 7.93e-11,
-           "A2" : 1.59e-9,
-           "A3" : 5.79e-9,
-           "A4" : 2.5e-8,
-           "A5" : 4.5e-8,
-           "A6" : 5.79e-7}
-m = shmip_m[shmip_suit]
+# shmip_suit = "A6"
+# shmip_m = {"A1" : 7.93e-11,
+#            "A2" : 1.59e-9,
+#            "A3" : 5.79e-9,
+#            "A4" : 2.5e-8,
+#            "A5" : 4.5e-8,
+#            "A6" : 5.79e-7}
+# m = shmip_m[shmip_suit]
 
-# geometry
+# # geometry
+# def surface(x,y):
+#     return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+# def bed(x,y):
+#     return 0
+
+
+# E suites geometry
+m = 1.158e-6
+shmip_suit = "E5"
+para_bench = 0.05
+shmip_para = {"E1":  0.05,
+              "E2":  0.0 ,
+              "E3": -0.1 ,
+              "E4": -0.5 ,
+              "E5": -0.7 }
+para = shmip_para[shmip_suit]
 def surface(x,y):
-    return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+    return 100*(x+200)**(1/4) + 1/60*x - 2e10**(1/4) + 1
+def f(x,para):
+    return (surface(6e3,0) - para*6e3)/6e3**2 * x**2 + para*x
+def g(y):
+    return 0.5e-6 * abs(y)**3
+def h(x,para):
+    return (-4.5*x/6e3 + 5) * (surface(x,0)-f(x, para)) / (surface(x,0)-f(x, para_bench)+1e-15)
 def bed(x,y):
-    return 0
+    return f(x,para) + g(y) * h(x,para)
 
 # time stepping
 dt0 = s_per_day*0.005
@@ -44,7 +67,7 @@ hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
 
 # for initial state, take steady state solution from a different run
-chk_file    = results_dir + "initial_fields_A5.h5"
+chk_file    = results_dir + "initial_fields_E2.h5"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_h_w(afile.load_function(mesh_, "h_w"))
@@ -52,7 +75,7 @@ with CheckpointFile(chk_file, 'r') as afile:
     hydro.set_initial_K(afile.load_function(mesh_, "K"))
 
 # solver options
-par = {"snes_type": "vinewtonrsls",
+par = {"snes_type": "newtonls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
        "snes_atol": 1e-5,
