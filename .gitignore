@@ -199,3 +199,9 @@ Greenland_data/
 
 # input files within run_xx folders
 input*.sh
+
+# log files
+*.txt
+
+# paraview
+*.pvsm

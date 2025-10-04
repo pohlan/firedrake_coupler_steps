@@ -14,12 +14,13 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-options_left', type=int, default=0, help='turn off annoying message')
     parser.add_argument('--run_index',dest='run_index', type=int,default=99999)
-    parser.add_argument('--sheet_conductivity',dest='k_s', type=float, default=1e-3)
-    parser.add_argument('--channel_conductivity',dest='k_c', type=float, default=1e-1)
-    parser.add_argument('--bump_height',dest='h_r', type=float, default=1e-1)
-    parser.add_argument('--bump_spacing',dest='l_r', type=float, default=1)
-    parser.add_argument('--sheet_width_below_channel',dest='l_c', type=float, default=1)
-    parser.add_argument('--englacial_void_ratio',dest='e_v', type=float, default=1e-3)
+    parser.add_argument('--sheet_conductivity',dest='k_s', type=float, default=0.05)
+    parser.add_argument('--channel_conductivity',dest='k_c', type=float, default=0.5)
+    parser.add_argument('--bump_height',dest='h_r', type=float, default=0.5)
+    parser.add_argument('--bump_spacing',dest='l_r', type=float, default=5)
+    parser.add_argument('--sheet_opening_exponent',dest='p_s', type=float, default=0.0)
+    parser.add_argument('--sheet_width_below_channel',dest='l_c', type=float, default=10)
+    parser.add_argument('--englacial_void_ratio',dest='e_v', type=float, default=1e-4)
     parser.add_argument('--basal_traction',dest='beta2', type=float, default=1e6)
     parser.add_argument('--pressure_exponent',dest='p', type=float, default=1)
     parser.add_argument('--sliding_exponent',dest='q', type=float, default=1)
@@ -30,7 +31,7 @@ def get_args():
 def save_params_to_csv(args, params_output_file, success=True):
     df_params = pd.DataFrame({"run_index":[args.run_index], "success":[success],
                               "k_s":[args.k_s], "k_c":[args.k_c], "h_r":[args.h_r], "l_r":[args.l_r], "l_c":[args.l_c], "e_v":[args.e_v],
-                              "beta2":[args.beta2], "p":[args.p], "q":[args.q]})
+                              "beta2":[args.beta2], "p":[args.p], "q":[args.q], "p_s":[args.p_s]})
     if os.path.exists(params_output_file):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)
     else:

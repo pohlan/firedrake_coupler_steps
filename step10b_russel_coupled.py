@@ -130,7 +130,7 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=get_dt(max(melt[:,0])), e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r)
+hydro.build_forms(m, dt0=get_dt(max(melt[:,0])), e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, p_s=args.p_s, beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
 stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
 
 x, y = df.SpatialCoordinate(mesh)
@@ -157,10 +157,19 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_monitor": None,
                  "error_on_nonconvergence": True}
 
+# Hack to initialize a function to hold channel fluxes
+# Mfr_file = df.File(results_dir+'M_fr.pvd'.format(args.run_index))
+# # Mfr = df.Function(coupler.Q_cg)
+# # Q_function = df.MeshFunction('double',mesh,1)
+# phi_Mfr = df.TestFunction(coupler.Q_cg)
+# dM = df.Function(coupler.Q_cg)
+# R_Mfr = (dM - abs(hydro.M_fr))*phi_Mfr*df.dx
+
+
 # time stepping and solve
 t       = 0.0
 d       = 0    # count the days
-t_end   = 5
+t_end   = 4
 success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)
@@ -186,6 +195,11 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 mm.interpolate(hydro.m)
                 f_melt.write(mm, time=t)
 
+            # Downs et al variable sheet conductivity
+            kmin = df.Constant(1e-3*s_per_day*365)
+            kmax = df.Constant(1e-2*s_per_day*365)
+            hydro.k_s.interpolate((kmax-kmin)/25 * hydro.m + kmin)
+
             df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
             f_N.write(N.interpolate(hydro.N))
             hydro.update_time_variables()
@@ -201,6 +215,10 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 afile.save_function(coupler.U.sub(4), idx=i, name="phi")
                 afile.save_function(coupler.U.sub(5), idx=i, name="h")
                 i += 1
+
+                # save frictional heat
+                # df.solve(R_Mfr == 0, dM, solver_parameters=solver_params)
+                # Mfr_file.write(dM)
 
         except df.exceptions.ConvergenceError:
             # If solver fails, try again with a smaller time step

@@ -86,6 +86,7 @@ class SpecFO(object):
         self.lamda_y = VerticalBasis(lamda_y_,coef,dcoef)
 
         self.U_b = df.as_vector([self.u(1),self.v(1)])
+        # self.tau_b = df.Function(self.coupler.Q_cg)
 
         # self.Us = df.project(df.as_vector([self.u(0),self.v(0)]), self.Q)
         self.Us = df.project(df.sqrt(self.u(0)**2+self.v(0)**2), self.coupler.Q_cg)
@@ -175,6 +176,7 @@ class SpecFO(object):
 
         tau_bx = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
         tau_by = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
+        # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
 
         R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx
         R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx
@@ -227,7 +229,7 @@ class GLADS(object):
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, e_v=1e-3, dt0=3600*2, k_s=5e-3, k_c=0.1, h_r=0.1, l_r=2.0, l_c=2.0, alpha=1.25, beta=1.5):
+    def build_forms(self, m, e_v=1e-3, dt0=3600*2, k_s=5e-3, k_c=0.1, h_r=0.1, l_r=2.0, p_s=0, l_c=2.0, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1):
         s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
@@ -240,14 +242,21 @@ class GLADS(object):
         cw    = self.coupler.cw
 
         # parameters
-        k_s   = df.Constant(k_s*s_per_year)       # m^(7/4) kg^(-1/2) -- sheet conductivity
+        # k_s   = df.Constant(k_s*s_per_year)       # m^(7/4) kg^(-1/2) -- sheet conductivity
+        k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s*s_per_year)
         k_c   = df.Constant(k_c*s_per_year)       # m^(3/2) kg^(-1/2) -- channel conductivity
         alpha = df.Constant(alpha)       # -                 -- flux exponent
         beta  = df.Constant(beta)        # -                 -- flux exponent
         h_r   = df.Constant(h_r)         # m                 -- bedrock bump height
         l_r   = df.Constant(l_r)         # m                 -- bedrock bump length
+        p_s   = df.Constant(p_s)         # -
         l_c   = df.Constant(l_c)         # m                 -- englacial storage ratio
         e_v   = df.Constant(e_v)
+        q     = df.Constant(q)
+        p     = df.Constant(p)
+        beta2 = df.Constant(beta2)
+        Uhat  = df.Constant(Uhat)
+        Nhat  = df.Constant(Nhat)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
@@ -301,7 +310,12 @@ class GLADS(object):
         q_c = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
 
         # sheet flux
-        q   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
+        q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
+        # Tim Hill's transition model laminar/turbulent
+        # nu = df.Constant(1.793e-6)
+        # omega = df.Constant(1/2000)
+        # gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
+        # q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
 
         # channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
@@ -319,16 +333,24 @@ class GLADS(object):
 
         # sliding speed from ice flow model
         u_b = df.sqrt(self.coupler.stokes.u(1)**2 + self.coupler.stokes.v(1)**2 + 1e-10)
+        tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
+
+        # melt through frictional heat
+        M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+
+        # dM = df.TrialFunction(self.coupler.Q_cg)
+        # mm = df.TestFunction(self.coupler.Q_cg)
+        # self.R_M = (dM-abs(M_fr))*mm*df.dx
 
         # opening and closure for sheets and channels
-        O   = df.max_value(u_b*(h_r - h)/l_r,0)
+        O   = df.max_value(u_b*(h_r - h)**(p_s+1)/l_r / h_r**p_s,0)
         C   = A*h*abs(N)**(n-1)*N
         O_c = (Chi-Pi) / (rho_i*L)
         C_c = A*S*abs(N)**(n-1)*N
 
-        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q) + xsi * (O-C-m) ) * df.dx
+        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O+M_fr*(1-rho_i/rho_w)-C-m) ) * df.dx
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
-        R_h     = ((h - h0)/dt - O + C) * psi * df.dx
+        R_h     = ((h - h0)/dt - O - M_fr + C) * psi * df.dx
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
 
         self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
