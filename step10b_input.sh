@@ -5,7 +5,8 @@ target_directory='parameter_runs/'
 
 # determine the number of already started runs by counting the number of directories, than add 1 to get new run_index
 num_directories=$(find "$target_directory" -maxdepth 1 -mindepth 1 -type d -name "run_*" | wc -l)
-run_index=$((num_directories+1))
+# run_index=$((num_directories+1))
+run_index=71
 
 # make a new directory and copy this file so that the input parameters are recorded at the start of the simulation
 new_dir=$target_directory'run_'$run_index/
@@ -17,12 +18,15 @@ e_v=0.0001
 l_r=5
 h_r=1.0
 p_s=0
-k_s=0.05
+k_s=0.03
 k_c=0.5
 l_c=10
-beta2=5e5
+beta2=7e5
 p=1.2
 q=0.5
+transition=True
+alpha=1.25
+omega=0.0005
 
 # run the model
-python -u step10b_russel_coupled.py --englacial_void_ratio $e_v --bump_spacing $l_r --bump_height $h_r --sheet_opening_exponent $p_s --sheet_conductivity $k_s --channel_conductivity $k_c --sheet_width_below_channel $l_c --basal_traction $beta2 --pressure_exponent $p --sliding_exponent $q --run_index $run_index
+python -u step10b_russel_coupled.py --englacial_void_ratio $e_v --bump_spacing $l_r --bump_height $h_r --sheet_opening_exponent $p_s --sheet_conductivity $k_s --channel_conductivity $k_c --sheet_width_below_channel $l_c --basal_traction $beta2 --pressure_exponent $p --sliding_exponent $q --run_index $run_index --laminar-turbulent_transition $transition --alpha_turbulent $alpha --omega $omega

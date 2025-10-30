@@ -18,6 +18,9 @@ def get_args():
     parser.add_argument('--channel_conductivity',dest='k_c', type=float, default=0.5)
     parser.add_argument('--bump_height',dest='h_r', type=float, default=0.5)
     parser.add_argument('--bump_spacing',dest='l_r', type=float, default=5)
+    parser.add_argument('--laminar-turbulent_transition', dest='transition', type=bool, default=False)
+    parser.add_argument('--omega',dest='omega',type=float, default=1/2000)
+    parser.add_argument('--alpha_turbulent',dest='alpha', type=float, default=1.25)
     parser.add_argument('--sheet_opening_exponent',dest='p_s', type=float, default=0.0)
     parser.add_argument('--sheet_width_below_channel',dest='l_c', type=float, default=10)
     parser.add_argument('--englacial_void_ratio',dest='e_v', type=float, default=1e-4)
@@ -31,7 +34,8 @@ def get_args():
 def save_params_to_csv(args, params_output_file, success=True):
     df_params = pd.DataFrame({"run_index":[args.run_index], "success":[success],
                               "k_s":[args.k_s], "k_c":[args.k_c], "h_r":[args.h_r], "l_r":[args.l_r], "l_c":[args.l_c], "e_v":[args.e_v],
-                              "beta2":[args.beta2], "p":[args.p], "q":[args.q], "p_s":[args.p_s]})
+                              "beta2":[args.beta2], "p":[args.p], "q":[args.q], "p_s":[args.p_s],
+                              "transition":[args.transition], "alpha":[args.alpha], "omega":[args.omega]})
     if os.path.exists(params_output_file):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)
     else:

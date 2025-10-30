@@ -7,13 +7,14 @@ import xarray as xr
 import geoutils as gu
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from scipy.ndimage import gaussian_filter
 from firedrake.checkpointing import CheckpointFile
 from datetime import datetime, timedelta
 import re
 
-run_index = 41
+run_index = 71
 
 # load model files
 with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as afile:
@@ -31,7 +32,7 @@ with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as af
         Us_model[:,i]  = afile.load_function(mesh, "Us", idx=i).vector()[:]
 
 # generate time vector
-start_date = datetime(2015, 11, 1)
+start_date = datetime(2016, 1, 1)
 dates_model = [start_date + timedelta(days=2*k) for k in range(n_idx)]
 
 
@@ -123,6 +124,13 @@ for (i,(xi,yi)) in enumerate(coords):
     # plt.ylim(15,225)
     plt.legend()
 plt.savefig(f"parameter_runs/plots/run_{run_index}_gl{gl}.jpg")
+
+# save to plot in Julia
+# ic = 1
+# xi, yi = coords[ic]
+# p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
+# df_pt = pd.DataFrame({"time": dates_model[:-1], "U_model": Us_model[p,1:]})
+# df_pt.to_csv(f"parameter_runs/run_{run_index}/{run_index}_gl{gl}_{ic}.csv", index=False)
 
 # plot map
 x0, xend = -2.35e5,-1.75e5

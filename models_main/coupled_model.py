@@ -229,7 +229,7 @@ class GLADS(object):
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, e_v=1e-3, dt0=3600*2, k_s=5e-3, k_c=0.1, h_r=0.1, l_r=2.0, p_s=0, l_c=2.0, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1):
+    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, p_s=0, l_c=10, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000):
         s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
@@ -240,10 +240,11 @@ class GLADS(object):
         L     = self.coupler.L
         ct    = self.coupler.ct
         cw    = self.coupler.cw
+        nu    = self.coupler.nu
 
         # parameters
-        # k_s   = df.Constant(k_s*s_per_year)       # m^(7/4) kg^(-1/2) -- sheet conductivity
-        k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s*s_per_year)
+        k_s   = df.Constant(k_s*s_per_year)       # m^(7/4) kg^(-1/2) -- sheet conductivity
+        # k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s*s_per_year)
         k_c   = df.Constant(k_c*s_per_year)       # m^(3/2) kg^(-1/2) -- channel conductivity
         alpha = df.Constant(alpha)       # -                 -- flux exponent
         beta  = df.Constant(beta)        # -                 -- flux exponent
@@ -257,6 +258,7 @@ class GLADS(object):
         beta2 = df.Constant(beta2)
         Uhat  = df.Constant(Uhat)
         Nhat  = df.Constant(Nhat)
+        omega = df.Constant(omega)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
@@ -310,12 +312,14 @@ class GLADS(object):
         q_c = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
 
         # sheet flux
-        q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
-        # Tim Hill's transition model laminar/turbulent
-        # nu = df.Constant(1.793e-6)
-        # omega = df.Constant(1/2000)
-        # gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
-        # q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
+        if transition:
+            # Tim Hill's transition model laminar/turbulent
+            gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
+            q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
+            self.Re = q_s/nu
+        else:
+            # 'original' GlaDS
+            q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
 
         # channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
@@ -408,6 +412,7 @@ class Coupler(object):
         self.L     = df.Constant(334e3)       # J / kg         -- latent heat of fusion
         self.ct    = df.Constant(7.5e-8)      # K / Pa         -- Clausius-Clapeyron constant
         self.cw    = df.Constant(4220.0)      # J / kg / K     -- specific heat capacity of water
+        self.nu    = df.Constant(1.793e-6)
 
         self.stokes = stokes
         self.hydro  = hydro
