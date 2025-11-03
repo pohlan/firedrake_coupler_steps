@@ -285,7 +285,7 @@ class GLADS(object):
         phi0 = self.phi0 = df.Function(self.V_phi)
         phi0.interpolate(0.5*rho_i * g * H + rho_w * g * B)
         h0   = self.h0   = df.Function(self.V_h)
-        h0.vector()[:]   = 0.5*h_r
+        h0.vector()[:]   = 0.1*h_r
         S0   = self.S0   = df.Function(self.V_S)
         S0.vector()[:]   = 0.001
 
@@ -337,24 +337,33 @@ class GLADS(object):
 
         # sliding speed from ice flow model
         u_b = df.sqrt(self.coupler.stokes.u(1)**2 + self.coupler.stokes.v(1)**2 + 1e-10)
-        tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
+        # tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
 
         # melt through frictional heat
-        M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+        # M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
 
         # dM = df.TrialFunction(self.coupler.Q_cg)
         # mm = df.TestFunction(self.coupler.Q_cg)
         # self.R_M = (dM-abs(M_fr))*mm*df.dx
 
+        # log-normal bump size
+        # sigma_hr = 1
+        # log_h_r_s = np.array([hh for hh in np.log(h_r(0)) + sigma_hr*np.linspace(-3,3,15)])
+        # probs = np.exp(-0.5*(log_h_r_s - np.log(h_r(0)))**2/(sigma_hr)**2)
+        # probs/=probs.sum()
+        # h_r_s = [df.Constant(np.exp(lhr)) for lhr in log_h_r_s]
+
         # opening and closure for sheets and channels
-        O   = df.max_value(u_b*(h_r - h)**(p_s+1)/l_r / h_r**p_s,0)
+        O   = df.max_value(u_b*(h_r - h)/l_r,0)
+        # O   = df.max_value(u_b*(h_r - h)**(p_s+1)/l_r / h_r**p_s,0)
+        # O = sum([p*(h_r/l_r)*u_b*Max(1 - h/h_r_i,0) for p,h_r_i in zip(probs,h_r_s)])
         C   = A*h*abs(N)**(n-1)*N
         O_c = (Chi-Pi) / (rho_i*L)
         C_c = A*S*abs(N)**(n-1)*N
 
-        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O+M_fr*(1-rho_i/rho_w)-C-m) ) * df.dx
+        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
-        R_h     = ((h - h0)/dt - O - M_fr + C) * psi * df.dx
+        R_h     = ((h - h0)/dt - O + C) * psi * df.dx
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
 
         self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
