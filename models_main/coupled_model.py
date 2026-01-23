@@ -203,6 +203,8 @@ class GLADS(object):
         E_h           = df.FiniteElement("DG", mesh.ufl_cell(),0)
         E_S           = df.FiniteElement("DGT", mesh.ufl_cell(),0)
         self.elements = [E_phi,E_h,E_S]
+        # functions for expressions to save
+        self.V_cg_vec = df.VectorFunctionSpace(self.mesh, "CG", 1)
 
         self.V_phi    = df.FunctionSpace(mesh,E_phi)
         self.V_h      = df.FunctionSpace(mesh,E_h)
@@ -212,6 +214,8 @@ class GLADS(object):
         self.results_dir = results_dir
         self.outfile_phi = VTKFile(results_dir+'df_phi.pvd')
         self.outfile_h   = VTKFile(results_dir+'df_h.pvd')
+        self.outfile_q   = VTKFile(results_dir+'df_q.pvd')
+        self.outfile_Re  = VTKFile(results_dir+'df_Re.pvd')
 
     def set_coupler(self,coupler):
         self.coupler = coupler
@@ -315,11 +319,11 @@ class GLADS(object):
         if transition:
             # Tim Hill's transition model laminar/turbulent
             gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
-            q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
+            self.q_s = q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
             self.Re = q_s/nu
         else:
             # 'original' GlaDS
-            q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
+            self.q_s = q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
 
         # channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
@@ -382,6 +386,8 @@ class GLADS(object):
     def write_variables_pvd(self,t):
         self.outfile_phi.write(df.project(self.coupler.U.sub(4), self.V_phi, name="phi"), time=t)
         self.outfile_h.write(df.project(self.coupler.U.sub(5), self.V_h, name="h"), time=t)
+        self.outfile_q.write(df.project(self.q_s, self.V_cg_vec, name="q"), time=t)
+        self.outfile_Re.write(df.project(self.Re, self.V_cg_vec, name="Re"), time=t)
 
     def save_end_state(self, chk_file, csv_file):
         with CheckpointFile(chk_file, 'w') as afile:

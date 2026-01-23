@@ -14,27 +14,26 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-options_left', type=int, default=0, help='turn off annoying message')
     parser.add_argument('--run_index',dest='run_index', type=int,default=99999)
-    parser.add_argument('--sheet_conductivity',dest='k_s', type=float, default=0.05)
-    parser.add_argument('--channel_conductivity',dest='k_c', type=float, default=0.5)
-    parser.add_argument('--bump_height',dest='h_r', type=float, default=0.5)
-    parser.add_argument('--bump_spacing',dest='l_r', type=float, default=5)
-    parser.add_argument('--laminar-turbulent_transition', dest='transition', type=bool, default=False)
-    parser.add_argument('--omega',dest='omega',type=float, default=1/2000)
-    parser.add_argument('--alpha_turbulent',dest='alpha', type=float, default=1.25)
-    parser.add_argument('--sheet_opening_exponent',dest='p_s', type=float, default=0.0)
-    parser.add_argument('--sheet_width_below_channel',dest='l_c', type=float, default=10)
-    parser.add_argument('--englacial_void_ratio',dest='e_v', type=float, default=1e-4)
-    parser.add_argument('--basal_traction',dest='beta2', type=float, default=1e6)
-    parser.add_argument('--pressure_exponent',dest='p', type=float, default=1)
-    parser.add_argument('--sliding_exponent',dest='q', type=float, default=1)
-    parser.add_argument('--data_directory',dest='data_directory', default='Greenland_data/')
-    parser.add_argument('--results_directory',dest='results_directory', default='parameter_runs/')
+    parser.add_argument('--k_s', type=float, default=0.05, help='sheet conductivity')
+    parser.add_argument('--k_c', type=float, default=0.5, help='channel conductivity')
+    parser.add_argument('--h_r', type=float, default=0.5, help='bump height')
+    parser.add_argument('--l_r', type=float, default=5, help='bump spacing')
+    parser.add_argument('--transition', action='store_true', help='laminar turbulent transition')
+    parser.add_argument('--omega',type=float, default=1/2000)
+    parser.add_argument('--alpha', type=float, default=1.25)
+    parser.add_argument('--l_c', type=float, default=10, help='sheet width below channel')
+    parser.add_argument('--e_v',dest='e_v', type=float, default=1e-4, help='englacial void ratio')
+    parser.add_argument('--beta2', type=float, default=1e6, help='basal traction')
+    parser.add_argument('--p', type=float, default=1, help='pressure exponent')
+    parser.add_argument('--q', type=float, default=1, help='sliding exponent')
+    parser.add_argument('--data_directory', default='Greenland_data/')
+    parser.add_argument('--results_directory', default='parameter_runs/')
     return parser.parse_args()
 
 def save_params_to_csv(args, params_output_file, success=True):
     df_params = pd.DataFrame({"run_index":[args.run_index], "success":[success],
                               "k_s":[args.k_s], "k_c":[args.k_c], "h_r":[args.h_r], "l_r":[args.l_r], "l_c":[args.l_c], "e_v":[args.e_v],
-                              "beta2":[args.beta2], "p":[args.p], "q":[args.q], "p_s":[args.p_s],
+                              "beta2":[args.beta2], "p":[args.p], "q":[args.q],
                               "transition":[args.transition], "alpha":[args.alpha], "omega":[args.omega]})
     if os.path.exists(params_output_file):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)

@@ -17,16 +17,19 @@ cp step10b_input.sh $new_dir'input_run'$run_index'.sh'
 e_v=0.0001
 l_r=5
 h_r=1.0
-p_s=0
 k_s=0.03
 k_c=0.5
 l_c=10
 beta2=7e5
 p=1.2
 q=0.5
-transition=True
+transition=true
 alpha=1.25
 omega=0.0005
 
 # run the model
-python -u step10b_russel_coupled.py --englacial_void_ratio $e_v --bump_spacing $l_r --bump_height $h_r --sheet_opening_exponent $p_s --sheet_conductivity $k_s --channel_conductivity $k_c --sheet_width_below_channel $l_c --basal_traction $beta2 --pressure_exponent $p --sliding_exponent $q --run_index $run_index --laminar-turbulent_transition $transition --alpha_turbulent $alpha --omega $omega
+options="--e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha $alpha --omega $omega"
+if [ "$transition" = true ]; then
+  options="$options --transition"
+fi
+python -u step10b_russel_coupled.py $options

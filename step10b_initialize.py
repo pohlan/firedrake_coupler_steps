@@ -16,7 +16,7 @@ s_per_day = 3600 * 24
 results_dir = 'step_10b/results/'
 data_dir    = 'Greenland_data/'
 
-m          = 3e-13
+m          = 1e-16
 
 # mesh
 # mesh_file = data_dir+'western_med_v2.msh'
@@ -27,7 +27,7 @@ mesh = df.Mesh(mesh_file)
 dt0 = 0.05/365
 dt_max = 45/365
 dt_min = 1e-3/365
-timestep_increase_fraction = 1.1
+timestep_increase_fraction = 1.05
 timestep_reduction_fraction = 0.5
 
 # geometry
@@ -40,11 +40,13 @@ B = df.Function(V)
 H = df.Function(V)
 
 sig = 1
-# r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
-r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth.nc")
+# r_bed = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed")
+r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
+# r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth.nc")
 B.dat.data[:] = r_bed.interp_points((meshx, meshy))
-# r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
-r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth.nc")
+# r_thk = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness")
+r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
+# r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth.nc")
 H.dat.data[:] = r_thk.interp_points((meshx, meshy))
 
 # make bed elevation and thickness the same at bc points of individual outlets
@@ -105,9 +107,8 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-# hydro.build_forms(m, dt0=dt0, e_v=1e-4, h_r=1.0, k_c=0.5, k_s=0.03, l_c=10.0, l_r=5.0, transition=True)
-hydro.build_forms(m, dt0=dt0, e_v=1e-3, h_r=0.1, k_c=0.05, k_s=5e-4, l_c=10.0, l_r=2.0, transition=False)
-stokes.build_forms(beta2=1e6, q=0.5, p=0.5, Nhat=Nhat, Uhat=Uhat)
+hydro.build_forms(m, dt0=dt0, e_v=1e-3, h_r=0.1, k_c=0.1, k_s=0.01, l_c=2, l_r=2, transition=False)
+stokes.build_forms(beta2=7e5, q=0.5, p=0.5, Nhat=Nhat, Uhat=Uhat)
 
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.01)
@@ -162,10 +163,10 @@ while (t <= t_end):
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # save end states for future initialization
-# chk_file_save = results_dir + f"initial_fields_russel_base_melt_smooth_sig{sig}.h5"
-chk_file_save = results_dir + f"initial_fields_russel_base_melt_smooth_new_coupled.h5"
-# csv_file_save = results_dir + f"initial_S_russel_base_melt_smooth_sig{sig}.csv"
-csv_file_save = results_dir + f"initial_S_russel_base_melt_smooth_new_coupled.csv"
+chk_file_save = results_dir + f"initial_fields_russel_base_melt_smooth_sig{sig}.h5"
+# chk_file_save = results_dir + f"initial_fields_russel_base_melt_smooth_new_coupled.h5"
+csv_file_save = results_dir + f"initial_S_russel_base_melt_smooth_sig{sig}.csv"
+# csv_file_save = results_dir + f"initial_S_russel_base_melt_smooth_new_coupled.csv"
 hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
