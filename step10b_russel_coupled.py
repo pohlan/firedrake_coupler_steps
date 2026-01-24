@@ -23,9 +23,6 @@ data_dir    = args.data_directory
 results_dir = args.results_directory+"/run_{}/".format(args.run_index)
 params_output_file = args.results_directory+"parameter_runs.csv"
 
-# m          = 3e-13
-# seasonal   = False
-
 # mesh
 mesh_file = data_dir+'russel/russel.msh'
 mesh = df.Mesh(mesh_file)
@@ -71,12 +68,16 @@ meshy = X.dat.data_ro[:,1]
 B = df.Function(V)
 H = df.Function(V)
 
-sig = 1
-# r_bed = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed")
-r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
+# load bed and thickness data, either original BedMachine or smoothed
+sig = args.sig_topo
+if sig==0:
+    r_bed = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed")
+    r_thk = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness")
+else:  # higher sigma == more smoothing
+    r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
+    r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
+# interpolate onto mesh
 B.dat.data[:] = r_bed.interp_points((meshx, meshy))
-# r_thk = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness")
-r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
 H.dat.data[:] = r_thk.interp_points((meshx, meshy))
 S = B.dat.data[:] + H.dat.data[:] # surface elevation
 
@@ -100,66 +101,13 @@ stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler(mesh, stokes, hydro)
 
 # melt input to hydro model
-
-# KAN (daily)
-seasonal=True
-df_KAN = pd.read_csv(data_dir+'KAN_melt.csv')
-def calc_melt(day, z):
-    f_m = 0.01*400
-    lapse = -0.005
-    # get day
-    day_floor = int(np.floor(day))
-    day_ceil  = day_floor+1
-    floor_weight = day_ceil - day
-    ceil_weight  = day - day_floor
-    i = np.where(df_KAN.dT_days == day_floor)[0][0]
-    # get temperature with lapse rate
-    T0 = df_KAN.T_L_smooth[i]*floor_weight + df_KAN.T_L_smooth[i+1]*ceil_weight
-    z0 = df_KAN.z_L[i]*floor_weight + df_KAN.z_L[i+1]*ceil_weight
-    dz = z-z0
-    T = T0 + lapse*dz
-    # get melt with degree-day factor
-    melt = f_m*np.max([0, T])
-    return melt
-mm = df.Function(V)
 f_melt = VTKFile(results_dir+"m0_per_year.pvd")
-
-# MAR (monthly)
-# print("Interpolating melt rates, taking a while..")
-# r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
-# delta = r.res[0]*2
-# r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
-# year_0  = 2016 - 1940 # starts in 1940
-# n_years = 6
-# b_0 = year_0*12
-# b_end = b_0 + n_years*12
-# i_months = range(b_0,b_end+1)
-# mm = df.Function(V)
-# f_melt = VTKFile(results_dir+"m0_per_year.pvd")
-# melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
-# for (n,i) in enumerate(i_months):
-#     print(n)
-#     mm.vector()[:] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
-#     # f_melt.write(mm, time=n)
-#     melt[:,n] = mm.vector()[:]
-# seasonal = True
-# print("... done")
-
-# fenics melt water input
-# seasonal = True
-# melt = np.zeros((len(H.vector()[:]), 12))
-# for i in range(12):
-#     fenics_smb_file = f"Greenland_data/russel/SMB_fenics/SMB_{i}.h5"
-#     with CheckpointFile(fenics_smb_file, 'r') as afile:
-#         mesh_ = afile.load_mesh()
-#         V_ = df.FunctionSpace(mesh_, "CG", 1)
-#         SMB_ = df.Function(V).interpolate(afile.load_function(mesh_, "SMB"))
-#         melt[:,i] = SMB_.vector()[:]
-
-# first time step:
-m = df.Function(V)
-# m.vector()[:] = melt[:,0]
-m.vector()[:] = np.array([calc_melt(0.0, z) for z in S])
+if args.melt_input == "KAN":
+    m, calc_m = hlp.melt_fct_KAN(hydro, S, data_dir)
+elif args.melt_input == "MAR":
+    m, calc_m = hlp.melt_fct_MAR(hydro, H, meshx, meshy, coupler)
+elif args.melt_input == "avg":
+    m, calc_m = hlp.melt_fct_avg(hydro, H)
 
 # Convenience functions for calculating the N scale
 ones = df.Function(coupler.Q_cg)
@@ -191,8 +139,8 @@ x, y = df.SpatialCoordinate(mesh)
 # hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.1)
-chk_file = f"step_10b/results/initial_fields_russel_base_melt_smooth_sig{sig}.h5"
-csv_file = f"step_10b/results/initial_S_russel_base_melt_smooth_sig{sig}.csv"
+chk_file = f"step_10b/results/initial_fields_russel_base_melt_sig{sig}.h5"
+csv_file = f"step_10b/results/initial_S_russel_base_melt_sig{sig}.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -236,24 +184,9 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             print("Minimal time step reached. Simulation failed.")
             break
         try:
-            if seasonal:
-                # # monthly (MAR/fenics)
-                # # month = (t%1)*12
-                # month = t*12
-                # month_floor = int(np.floor(month))
-                # month_ceil = int(np.ceil(month))
-                # floor_weight = month_ceil - month
-                # ceil_weight = month - month_floor
-                # # hydro.m.vector()[:] = melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
-                # hydro.m.vector()[:] = melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
-                # mm.interpolate(hydro.m)
-                # f_melt.write(mm, time=t)
-
-                # KAN
-                day = t*365
-                hydro.m.vector()[:] = np.array([calc_melt(day, z) for z in S])
-                mm.interpolate(hydro.m)
-                f_melt.write(mm, time=t)
+            calc_m(t)
+            m.interpolate(hydro.m)
+            f_melt.write(m, time=t)
 
             # Downs et al variable sheet conductivity
             # kmin = df.Constant(1e-3*s_per_day*365)

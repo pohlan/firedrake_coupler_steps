@@ -26,9 +26,11 @@ q=0.5
 transition=true
 alpha=1.25
 omega=0.0005
+sig_topo=15
+melt_input='avg'
 
 # run the model
-options="--e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha $alpha --omega $omega"
+options="--e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha $alpha --omega $omega --sig_topo $sig_topo --melt_input $melt_input"
 if [ "$transition" = true ]; then
   options="$options --transition"
 fi

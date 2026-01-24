@@ -16,7 +16,9 @@ s_per_day = 3600 * 24
 results_dir = 'step_10b/results/'
 data_dir    = 'Greenland_data/'
 
-m          = 1e-16
+# parameters
+m          = 1e-16 # constant melt input (m/yr)
+sig        = 0     # amount of smoothing for bed/thickness input (0=no smoothing)
 
 # mesh
 # mesh_file = data_dir+'western_med_v2.msh'
@@ -39,14 +41,15 @@ meshy = X.dat.data_ro[:,1]
 B = df.Function(V)
 H = df.Function(V)
 
-sig = 1
-# r_bed = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed")
-r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
-# r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth.nc")
+
+if sig==0:
+    r_bed = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed")
+    r_thk = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness")
+else:  # higher sigma == more smoothing
+    r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
+    r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
+# interpolate onto mesh
 B.dat.data[:] = r_bed.interp_points((meshx, meshy))
-# r_thk = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness")
-r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
-# r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth.nc")
 H.dat.data[:] = r_thk.interp_points((meshx, meshy))
 
 # make bed elevation and thickness the same at bc points of individual outlets
@@ -163,10 +166,8 @@ while (t <= t_end):
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # save end states for future initialization
-chk_file_save = results_dir + f"initial_fields_russel_base_melt_smooth_sig{sig}.h5"
-# chk_file_save = results_dir + f"initial_fields_russel_base_melt_smooth_new_coupled.h5"
-csv_file_save = results_dir + f"initial_S_russel_base_melt_smooth_sig{sig}.csv"
-# csv_file_save = results_dir + f"initial_S_russel_base_melt_smooth_new_coupled.csv"
+chk_file_save = results_dir + f"initial_fields_russel_base_melt_sig{sig}.h5"
+csv_file_save = results_dir + f"initial_S_russel_base_melt_sig{sig}.csv"
 hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)

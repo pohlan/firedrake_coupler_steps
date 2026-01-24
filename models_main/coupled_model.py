@@ -320,10 +320,11 @@ class GLADS(object):
             # Tim Hill's transition model laminar/turbulent
             gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
             self.q_s = q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
-            self.Re = q_s/nu
         else:
             # 'original' GlaDS
             self.q_s = q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
+        # save Reynolds number for visualization
+        self.Re = q_s/nu
 
         # channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
