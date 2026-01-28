@@ -233,7 +233,7 @@ class GLADS(object):
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, p_s=0, l_c=10, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000):
+    def build_forms(self, m, Qs_moulin, e_v=1e-4, dt0=3600*2, k_s=0.005, k_c=0.1, h_r=0.1, l_r=2, l_c=2, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000):
         s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
@@ -254,7 +254,6 @@ class GLADS(object):
         beta  = df.Constant(beta)        # -                 -- flux exponent
         h_r   = df.Constant(h_r)         # m                 -- bedrock bump height
         l_r   = df.Constant(l_r)         # m                 -- bedrock bump length
-        p_s   = df.Constant(p_s)         # -
         l_c   = df.Constant(l_c)         # m                 -- englacial storage ratio
         e_v   = df.Constant(e_v)
         q     = df.Constant(q)
@@ -263,6 +262,11 @@ class GLADS(object):
         Uhat  = df.Constant(Uhat)
         Nhat  = df.Constant(Nhat)
         omega = df.Constant(omega)
+        Am    = df.Constant(10.)         # m^2 -- moulin cross-sectional area
+
+        Qs = self.Qs = df.Function(self.V_phi)
+        # make melt input to only specific nodes where there is a moulin...
+        Qs.interpolate(Qs_moulin)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
@@ -360,7 +364,6 @@ class GLADS(object):
 
         # opening and closure for sheets and channels
         O   = df.max_value(u_b*(h_r - h)/l_r,0)
-        # O   = df.max_value(u_b*(h_r - h)**(p_s+1)/l_r / h_r**p_s,0)
         # O = sum([p*(h_r/l_r)*u_b*Max(1 - h/h_r_i,0) for p,h_r_i in zip(probs,h_r_s)])
         C   = A*h*abs(N)**(n-1)*N
         O_c = (Chi-Pi) / (rho_i*L)
@@ -368,10 +371,11 @@ class GLADS(object):
 
         R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
+        R_phi_M = - xsi * (-Am/(rho_w*g)*(phi-phi0)/dt + Qs)
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
 
-        self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
+        self.coupler.R  += R_phi_h + R_phi_S + R_phi_M + R_h + R_S
 
         # boundary conditions
         self.bcs = [df.DirichletBC(self.coupler.V.sub(4), rho_w*g*B, 1)] # id =1 --> part of boundary at the terminus
