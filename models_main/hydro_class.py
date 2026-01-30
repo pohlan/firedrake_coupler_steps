@@ -241,7 +241,7 @@ class SHAKTI(object):
     def __init__(self,mesh, results_dir):
         self.mesh  = mesh
         E_h_w      = df.FiniteElement("CG", mesh.ufl_cell(), 1)
-        E_h        = df.FiniteElement("CG", mesh.ufl_cell(),1)
+        E_h        = df.FiniteElement("DG", mesh.ufl_cell(),0)
         E_K        = df.FiniteElement("CG", mesh.ufl_cell(),1)
         self.E_V   = df.MixedElement([E_h_w,E_h, E_K])
         self.V     = df.FunctionSpace(mesh,self.E_V)
@@ -256,8 +256,10 @@ class SHAKTI(object):
         self.outfile_K   = VTKFile(results_dir+results_dir[:-1]+'_K.pvd')
         self.outfile_N   = VTKFile(results_dir+results_dir[:-1]+'_N.pvd')
         N_out            = df.Function(self.V_h_w)
+        self.outfile_M   = VTKFile(results_dir+results_dir[:-1]+'_M.pvd')
 
     def build_variables(self, m_, dt_, thik, bed, e_v_=0.0): # shmip_m[shmip_suit]
+        s_per_year = 1 #60**2*24*365
         # constants
         rho_i = df.Constant(910)      # kg / m^3
         rho_w = df.Constant(1000)     # kg / m^3
@@ -267,15 +269,15 @@ class SHAKTI(object):
         cw    = df.Constant(4220.0)   # J / kg / K -- specific heat capacity of water
         h_r   = df.Constant(0.1)      # m
         l_r   = df.Constant(2.0)      # m
-        nu    = df.Constant(1.787e-6) # m^2/s -- kinematic viscosity of water
-        omega = df.Constant(1e-3)     # - -- controlling nonlinear transition between laminar/turbulent
+        nu    = df.Constant(1.787e-6*s_per_year) # m^2/s -- kinematic viscosity of water
+        omega = df.Constant(3e-4)     # - -- controlling nonlinear transition between laminar/turbulent
         G     = df.Constant(0.0)     # W/m^2 -- geothermal heat flux
-        A     = df.Constant(5e-25)  # Pa^(-3) s^(-1)
+        A     = df.Constant(5e-25*s_per_year)  # Pa^(-3) s^(-1)
         n     = df.Constant(3)        # -
 
         e_v   = df.Constant(e_v_)     # -
         m     = self.m = df.Function(self.V_h_w) # m / s
-        m.interpolate(m_)
+        m.interpolate(m_*s_per_year)
 
         # initialize bed and ice surface
         B = self.B = df.Function(self.V_h_w)
@@ -291,11 +293,11 @@ class SHAKTI(object):
         # initial fields, default
         h_w0 = self.h_w0 = df.Function(self.V_h_w)
         # h_w0.interpolate(1e-4)
-        h_w0.interpolate(0.01*H*rho_i/rho_w + B)
+        h_w0.interpolate(0.9*H*rho_i/rho_w + B)
         h0   = self.h0   = df.Function(self.V_h)
         h0.interpolate(1e-3)
         K0   = self.K0   = df.Function(self.V_K)
-        K0.interpolate(1e-2)
+        K0.interpolate(0.02*s_per_year)
 
         # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
         U.sub(0).assign(h_w0)
@@ -316,19 +318,20 @@ class SHAKTI(object):
         tau_b = df.Constant(0.0) #  rho_i*g*H*S.dx(0)
         # beta2 = 1e5
         # u_b = tau_b/(N*beta2)
-        u_b = df.Constant(1e-6)
+        u_b = df.Constant(1e-6*s_per_year)
 
         # flux
         q = -K*df.grad(h_w)
 
         # residual for calculating K
         Re  = K*((df.dot(df.grad(h_w),df.grad(h_w))+1e-10)**0.5)/nu  # Reynolds number
-        R_K = w*(K - abs(h)**3*g/(12*nu*(1+omega*Re)))*df.dx
+        R_K = w*(12*nu*(1+omega*Re)*K - abs(h)**3*g*s_per_year**2)*df.dx
 
         # opening and closure for sheets and channels
         O   = df.max_value(u_b*(h_r - h)/l_r,0)
-        C   = A*h*abs(N)**(n-1)*N
-        M   = 1/L * (G + abs(tau_b*u_b) + rho_w*g*df.max_value(df.dot(q,df.grad(h_w)),1e-10) - ct*cw*rho_w*df.max_value(df.dot(q,df.grad(P_w)),-1e-4))
+        C   = A*h*abs(N)**(n-1)*df.max_value(N,10000)
+        M   = 1/L * (G + abs(tau_b*u_b) - rho_w*g*df.dot(q,df.grad(h_w)) + ct*cw*rho_w*df.max_value(df.dot(q,df.grad(P_w)),-1e-4))
+        self.ratio = (M/rho_i) / (df.max_value(O,0.0)+M/rho_i)
 
         R_phi_h = (xsi*e_v*(h_w-h_w0)/dt + df.dot(df.grad(xsi),K*df.grad(h_w)) + xsi * (O+M*(1/rho_i-1/rho_w)-C-m) ) * df.dx
         R_h     = ((h - h0)/dt - O - M/rho_i + C) * psi * df.dx
@@ -350,6 +353,7 @@ class SHAKTI(object):
         self.outfile_h.write(df.project(self.U.sub(1), self.V_h, name="h"))
         self.outfile_K.write(df.project(self.U.sub(2), self.V_h_w, name="K"))
         self.outfile_N.write(df.project(self.N, self.V_h_w, name="N"))
+        self.outfile_M.write(df.project(self.ratio, self.V_h_w, name="ratio_efficient"))
 
     def save_end_state(self, chk_file):
         with CheckpointFile(chk_file, 'w') as afile:

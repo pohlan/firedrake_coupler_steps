@@ -8,49 +8,50 @@ s_per_day = 3600 * 24
 results_dir = 'step_11/'
 
 # mesh
-nx, ny = 75, 25
+nx, ny = 100, 35
 Lx, Ly = 100e3, 20e3
-# mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
-mesh = df.Mesh("valley.msh")
+mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
+# mesh = df.Mesh("valley.msh")
 x, y = df.SpatialCoordinate(mesh)
 
 # shmip
-# shmip_suit = "A6"
-# shmip_m = {"A1" : 7.93e-11,
-#            "A2" : 1.59e-9,
-#            "A3" : 5.79e-9,
-#            "A4" : 2.5e-8,
-#            "A5" : 4.5e-8,
-#            "A6" : 5.79e-7}
-# m = shmip_m[shmip_suit]
+shmip_suit = "A6"
+shmip_m = {"A1" : 7.93e-11,
+           "A2" : 1.59e-9,
+           "A3" : 5.79e-9,
+           "A4" : 2.5e-8,
+        #    "A5" : 4e-8,
+           "A5" : 5e-7,
+           "A6" : 5.79e-7}
+m = shmip_m[shmip_suit]
 
-# # geometry
-# def surface(x,y):
-#     return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
-# def bed(x,y):
-#     return 0
+# geometry
+def surface(x,y):
+    return 6*( df.sqrt(x+5e3) - df.sqrt(5e3) ) + 1
+def bed(x,y):
+    return 0
 
 
 # E suites geometry
-m = 1.158e-6
-shmip_suit = "E5"
-para_bench = 0.05
-shmip_para = {"E1":  0.05,
-              "E2":  0.0 ,
-              "E3": -0.1 ,
-              "E4": -0.5 ,
-              "E5": -0.7 }
-para = shmip_para[shmip_suit]
-def surface(x,y):
-    return 100*(x+200)**(1/4) + 1/60*x - 2e10**(1/4) + 1
-def f(x,para):
-    return (surface(6e3,0) - para*6e3)/6e3**2 * x**2 + para*x
-def g(y):
-    return 0.5e-6 * abs(y)**3
-def h(x,para):
-    return (-4.5*x/6e3 + 5) * (surface(x,0)-f(x, para)) / (surface(x,0)-f(x, para_bench)+1e-15)
-def bed(x,y):
-    return f(x,para) + g(y) * h(x,para)
+# m = 1.158e-6
+# shmip_suit = "E5"
+# para_bench = 0.05
+# shmip_para = {"E1":  0.05,
+#               "E2":  0.0 ,
+#               "E3": -0.1 ,
+#               "E4": -0.5 ,
+#               "E5": -0.7 }
+# para = shmip_para[shmip_suit]
+# def surface(x,y):
+#     return 100*(x+200)**(1/4) + 1/60*x - 2e10**(1/4) + 1
+# def f(x,para):
+#     return (surface(6e3,0) - para*6e3)/6e3**2 * x**2 + para*x
+# def g(y):
+#     return 0.5e-6 * abs(y)**3
+# def h(x,para):
+#     return (-4.5*x/6e3 + 5) * (surface(x,0)-f(x, para)) / (surface(x,0)-f(x, para_bench)+1e-15)
+# def bed(x,y):
+#     return f(x,para) + g(y) * h(x,para)
 
 # time stepping
 dt0 = s_per_day*0.005
@@ -59,37 +60,51 @@ dt_min = s_per_day*1e-5
 timestep_increase_fraction = 1.1
 timestep_reduction_fraction = 0.5
 
+# dt0    = 0.01/365
+# dt_max = 20/365
+# dt_min = 1e-3/365
+# timestep_increase_fraction = 1.1
+# timestep_reduction_fraction = 0.5
+# day = 1/365
+# hour = day/24
+
 # hydro object
 hydro = SHAKTI(mesh, results_dir)
-hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v_=1e-3)
+hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v_=0)
 
 hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
 
 # for initial state, take steady state solution from a different run
-chk_file    = results_dir + "initial_fields_E2.h5"
+chk_file    = results_dir + "initial_fields_A5.h5"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_h_w(afile.load_function(mesh_, "h_w"))
     hydro.set_initial_h(afile.load_function(mesh_, "h"))
     hydro.set_initial_K(afile.load_function(mesh_, "K"))
+h0 = df.Function(hydro.V_h)
+# h0.vector()[:] = 0.01 #+0.001*np.random.randn(len(hydro.H.vector()))
+h0.vector()[:] = hydro.h0.vector()[:] + 0.001*np.random.randn(len(hydro.h0.vector()))
+hydro.set_initial_h(h0)
 
 # solver options
 par = {"snes_type": "newtonls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
        "snes_atol": 1e-5,
-       "snes_max_it": 1000,
+       "snes_max_it": 200,
        "report": True,
        "snes_monitor": None,
        "error_on_nonconvergence": True}
 
 # time stepping and solve
 t     = 0.0
-t_end = s_per_day*365*100
+t_end = s_per_day*365*30
+# t_end = 30
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
-    print([t / (3600*24*365), dt / s_per_day])
+    print("Time = {:.2f} years, dt = {:.1f} days".format(t / (3600*24*365), dt / s_per_day))
+    # print("Time = {:.2f} years, dt = {:.1f} days".format(t, dt*365))
     if dt < dt_min:
         print("Minimal time step reached. Simulation failed.")
         break
@@ -107,5 +122,5 @@ while (t <= t_end):
 
 # save end result such that it can serve as initial field for another simulation
 # if shmip_suit == "A1":
-chk_file_save = results_dir + "initial_fields_"+shmip_suit+".h5"
-hydro.save_end_state(chk_file_save)
+# chk_file_save = results_dir + "initial_fields_"+shmip_suit+".h5"
+# hydro.save_end_state(chk_file_save)
