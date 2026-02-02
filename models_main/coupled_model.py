@@ -229,11 +229,11 @@ class GLADS(object):
         # water pressure and effective pressure
         H = self.coupler.H
         B = self.coupler.B
-        self.phi = self.coupler.U[4]
+        self.phi = self.coupler.U[0]
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, Qs_moulin, e_v=1e-4, dt0=3600*2, k_s=0.005, k_c=0.1, h_r=0.1, l_r=2, l_c=2, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000):
+    def build_forms(self, m, df_moul, e_v=1e-4, dt0=3600*2, k_s=0.005, k_c=0.1, h_r=0.1, l_r=2, l_c=2, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000):
         s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
@@ -264,9 +264,15 @@ class GLADS(object):
         omega = df.Constant(omega)
         Am    = df.Constant(10.)         # m^2 -- moulin cross-sectional area
 
-        Qs = self.Qs = df.Function(self.V_phi)
         # make melt input to only specific nodes where there is a moulin...
-        Qs.interpolate(Qs_moulin)
+        source_location = [[xx,yy] for (xx,yy) in zip(df_moul.x,df_moul.y)]
+        v_mesh = df.VertexOnlyMesh(self.mesh, source_location)
+        V_s = df.FunctionSpace(v_mesh, "DG", 0)
+        delta = df.Function(V_s).interpolate(df_moul.m[0]*s_per_year)
+        v_test = df.TestFunction(V_s)
+        source_cofunction = df.assemble(delta * v_test * df.dx)
+        Qs = df.Cofunction(self.coupler.V.dual()) #.interpolate(source_cofunction)
+        Qs.sub(0).interpolate(source_cofunction)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
@@ -277,13 +283,13 @@ class GLADS(object):
         # variables
         phi = self.phi
         N   = self.N
-        h   = self.coupler.U[5]
-        S   = self.coupler.U[6]
+        h   = self.coupler.U[1]
+        S   = self.coupler.U[2]
 
         # test functions
-        xsi = self.coupler.Lambda[4]
-        psi = self.coupler.Lambda[5]
-        w   = self.coupler.Lambda[6]
+        xsi = self.coupler.Lambda[0]
+        psi = self.coupler.Lambda[1]
+        w   = self.coupler.Lambda[2]
 
         # geometry
         H = self.coupler.H
@@ -298,9 +304,9 @@ class GLADS(object):
         S0.vector()[:]   = 0.001
 
         # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
-        self.coupler.U.sub(4).assign(phi0)
-        self.coupler.U.sub(5).assign(h0)
-        self.coupler.U.sub(6).assign(S0)
+        self.coupler.U.sub(0).assign(phi0)
+        self.coupler.U.sub(1).assign(h0)
+        self.coupler.U.sub(2).assign(S0)
 
         # edge-tangent unit vector
         normal = df.FacetNormal(self.mesh)
@@ -345,7 +351,8 @@ class GLADS(object):
         Pi = -ct*cw*rho_w*(Q+f*l_c*q_c)*dPds
 
         # sliding speed from ice flow model
-        u_b = df.sqrt(self.coupler.stokes.u(1)**2 + self.coupler.stokes.v(1)**2 + 1e-10)
+        # u_b = df.sqrt(self.coupler.stokes.u(1)**2 + self.coupler.stokes.v(1)**2 + 1e-10)
+        u_b = df.Constant(1e-6*s_per_year)
         # tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
 
         # melt through frictional heat
@@ -371,51 +378,51 @@ class GLADS(object):
 
         R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
-        R_phi_M = - xsi * (-Am/(rho_w*g)*(phi-phi0)/dt + Qs)
+        R_phi_M = - xsi * (-Am/(rho_w*g)*(phi-phi0)/dt)*df.dx + Qs
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
 
         self.coupler.R  += R_phi_h + R_phi_S + R_phi_M + R_h + R_S
 
         # boundary conditions
-        self.bcs = [df.DirichletBC(self.coupler.V.sub(4), rho_w*g*B, 1)] # id =1 --> part of boundary at the terminus
+        self.bcs = [df.DirichletBC(self.coupler.V.sub(0), rho_w*g*B, 1)] # id =1 --> part of boundary at the terminus
 
     def set_timestep(self, dt_):
         self.dt.assign(dt_)
 
     def update_time_variables(self):
-        self.phi0.assign(self.coupler.U.sub(4))
-        self.h0.assign(self.coupler.U.sub(5))
-        self.S0.assign(self.coupler.U.sub(6))
+        self.phi0.assign(self.coupler.U.sub(0))
+        self.h0.assign(self.coupler.U.sub(1))
+        self.S0.assign(self.coupler.U.sub(2))
 
     def write_variables_pvd(self,t):
-        self.outfile_phi.write(df.project(self.coupler.U.sub(4), self.V_phi, name="phi"), time=t)
-        self.outfile_h.write(df.project(self.coupler.U.sub(5), self.V_h, name="h"), time=t)
+        self.outfile_phi.write(df.project(self.coupler.U.sub(0), self.V_phi, name="phi"), time=t)
+        self.outfile_h.write(df.project(self.coupler.U.sub(1), self.V_h, name="h"), time=t)
         self.outfile_q.write(df.project(self.q_s, self.V_cg_vec, name="q"), time=t)
         self.outfile_Re.write(df.project(self.Re, self.V_cg_vec, name="Re"), time=t)
 
     def save_end_state(self, chk_file, csv_file):
         with CheckpointFile(chk_file, 'w') as afile:
             afile.save_mesh(self.mesh)  # optional
-            afile.save_function(self.coupler.U.sub(4), name="phi")
-            afile.save_function(self.coupler.U.sub(5), name="h")
-        df_S = pd.DataFrame({'S': self.coupler.U.sub(6).vector()[:]})
+            afile.save_function(self.coupler.U.sub(0), name="phi")
+            afile.save_function(self.coupler.U.sub(1), name="h")
+        df_S = pd.DataFrame({'S': self.coupler.U.sub(2).vector()[:]})
         df_S.to_csv(csv_file, index=False)
 
     # for choosing different initial values than the default
     # has to be given as an expression not an array
     def set_initial_phi(self,phi0_):
         self.phi0.interpolate(phi0_)
-        self.coupler.U.sub(4).assign(self.phi0)
+        self.coupler.U.sub(0).assign(self.phi0)
     def set_initial_h(self,h0_):
         self.h0.interpolate(h0_)
-        self.coupler.U.sub(5).assign(self.h0)
+        self.coupler.U.sub(1).assign(self.h0)
     def set_initial_S(self,S0_):
         if type(S0_) == np.ndarray:
             self.S0.vector()[:] = S0_
         else:
             self.S0.interpolate(S0_)
-        self.coupler.U.sub(6).assign(self.S0)
+        self.coupler.U.sub(2).assign(self.S0)
 
 
 class Coupler(object):
@@ -437,7 +444,8 @@ class Coupler(object):
         self.stokes = stokes
         self.hydro  = hydro
 
-        elements = self.stokes.elements + self.hydro.elements
+        # elements = self.stokes.elements + self.hydro.elements
+        elements = self.hydro.elements
 
         E_V      = df.MixedElement(elements)
         self.V   = df.FunctionSpace(mesh,E_V)

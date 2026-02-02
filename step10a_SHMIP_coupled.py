@@ -42,17 +42,13 @@ stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler(mesh, stokes, hydro)
 
 df_moul = pd.read_csv('/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/SHMIP_results/B2_M.csv', names=["idx","x","y","m"])
-V = df.FunctionSpace(mesh, "CG", 1)
-Qs_moulin = df.Function(V)
-
-v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
-X = df.assemble(interpolate(mesh.coordinates,v_dg))
-meshx = X.dat.data_ro[:,0]
-meshy = X.dat.data_ro[:,1]
-
-for (mx,my,Q_in) in zip(df_moul.x,df_moul.y,df_moul.m):
-    ii = np.argmin(np.sqrt((meshx-mx)**2+(meshy-my)**2))
-    Qs_moulin.vector()[ii] = Q_in*s_per_day*365
+# source_location = [[xx,yy] for (xx,yy) in zip(df_moul.x,df_moul.y)]
+# v_mesh = df.VertexOnlyMesh(mesh, source_location)
+# V_s = df.FunctionSpace(v_mesh, "DG", 0)
+# Qs_moulin = df.Function(V_s).interpolate(df.moul.m[0])
+# v_test = df.TestFunction(V_s)
+# source_cofunction = df.assemble(Qs_moulin * v_test * df.dx)
+# q_s = df.Cofunction(V.dual()).interpolate(source_cofunction)
 
 
 
@@ -105,12 +101,12 @@ Nhat   = df.Constant(917*9.81*H_mean)
 
 # set geometries and variables
 coupler.set_geometry(B, H)
-stokes.set_coupler(coupler)
+# stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
-stokes.build_variables()
-hydro.build_forms(m, Qs_moulin, dt0=dt0, e_v=e_v)
-stokes.build_forms(beta2=1e6, q=1.0, p=1.0, Nhat=Nhat, Uhat=Uhat)
+# stokes.build_variables()
+hydro.build_forms(m, df_moul, dt0=dt0)
+# stokes.build_forms(beta2=1e6, q=1.0, p=1.0, Nhat=Nhat, Uhat=Uhat)
 hlp.plot_geometry(coupler.B, coupler.H, mesh)
 
 # for initial state, take steady state solution from a different run
@@ -125,7 +121,7 @@ hlp.plot_geometry(coupler.B, coupler.H, mesh)
 # hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 # hydro.set_initial_S(10 * np.random.rand(len(coupler.U.sub(2).vector()[:])))
 # hydro.set_initial_S(20*(1-x/100e3))
-hydro.set_initial_phi(0.0)
+# hydro.set_initial_phi(0.0)
 
 solver_params = {"snes_type": "newtonls",#newton
                  "pc_factor_mat_solver_type": "mumps", # ?
@@ -160,7 +156,7 @@ while (t <= t_end):
         t += dt
         hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
         hydro.write_variables_pvd(t)
-        stokes.write_variables_pvd(t)
+        # stokes.write_variables_pvd(t)
 
         N_fl.write(bla.interpolate(hydro.N))
         # f_fl.write(bla.interpolate(hydro.f))
@@ -170,5 +166,5 @@ while (t <= t_end):
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, shmip_suit)
-hlp.scatterplt_fields(coupler.U.subfunctions[0:2], ["ubar_x, ubar_y"], df.MixedElement(stokes.elements[0:2]), mesh, results_dir, shmip_suit)
+# hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, shmip_suit)
+# hlp.scatterplt_fields(coupler.U.subfunctions[0:2], ["ubar_x, ubar_y"], df.MixedElement(stokes.elements[0:2]), mesh, results_dir, shmip_suit)
