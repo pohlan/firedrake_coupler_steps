@@ -38,6 +38,18 @@ def scatterplt_fields(hydro, dest_id):
         plt.colorbar()
         plt.savefig(hydro.results_dir+name+"_"+dest_id+".jpg")
 
+    Q = df.project(abs(hydro.Q), hydro.V_S)
+    # get dof coordinates
+    Vmesh = df.VectorFunctionSpace(hydro.mesh, hydro.E_V.sub_elements[2])
+    X = df.assemble(interpolate(hydro.mesh.coordinates,Vmesh))
+    meshx = X.dat.data[:,0]
+    meshy = X.dat.data[:,1]
+    # scatter plot
+    plt.figure()
+    plt.scatter(meshx, meshy, 10, Q.vector()[:])
+    plt.colorbar()
+    plt.savefig(hydro.results_dir+"Q_"+dest_id+".jpg")
+
 def diff_to_glads_matlab(hydro, file):
     ds_mw = xr.open_dataset(file)
     x_mw = ds_mw.coords1.data[0]

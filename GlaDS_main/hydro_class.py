@@ -19,11 +19,11 @@ class GLADS(object):
         # create output files
         self.results_dir = results_dir
         self.outfile_phi = VTKFile(results_dir+results_dir[:-1]+'_phi.pvd')
+        self.outfile_q = VTKFile(results_dir+results_dir[:-1]+'_q.pvd')
         self.outfile_h   = VTKFile(results_dir+results_dir[:-1]+'_h.pvd')
-        # self.outfile_S   = VTKFile(results_dir+'step2_S.pvd')
-        # self.outfile_Q   = VTKFile(results_dir+'step2_Q.pvd')
+        self.outfile_N   = VTKFile(results_dir+results_dir[:-1]+'_N.pvd')
 
-    def build_variables(self, m_, dt_, surface, bed, e_v_=0.0): # shmip_m[shmip_suit]
+    def build_variables(self, m_, df_moul, dt_, surface, bed, e_v_=0.0): # shmip_m[shmip_suit]
         # constants
         rho_i = df.Constant(910)      # kg / m^3
         rho_w = df.Constant(1000)     # kg / m^3
@@ -41,6 +41,7 @@ class GLADS(object):
         l_c   = df.Constant(2.0)      # m
         A     = df.Constant(2.5e-25)  # Pa^(-3) s^(-1)
         n     = df.Constant(3)        # -
+        Am    = df.Constant(10.0)
 
         e_v   = df.Constant(e_v_)     # -
         m     = self.m = df.Function(self.V_phi) # m / s
@@ -57,6 +58,44 @@ class GLADS(object):
         U  = self.U = df.Function(self.V)
         phi, h, S   = df.split(U)
         xsi, psi, w = df.TestFunctions(self.V)
+
+        # make melt input to only specific nodes where there is a moulin
+        # source_location = [[xx,yy] for (xx,yy) in zip(df_moul.x,df_moul.y)]
+        # v_mesh = df.VertexOnlyMesh(self.mesh, source_location)
+        # V_s = df.FunctionSpace(v_mesh, "DG", 0)
+        # delta = df.Function(V_s).interpolate(df_moul.m[0]*s_per_year)
+        # v_test = df.TestFunction(V_s)
+        # source_cofunction = df.assemble(delta * v_test * df.dx)
+        # Qs = df.Cofunction(self.V.dual())
+        # Qs.sub(0).interpolate(source_cofunction)
+        # # f.interpolate(conditional('distance from (x,y)'))
+        # # Qs = df.project(source_cofunction, self.V.subfunctions[0])
+        # v_check = df.Function(self.V.sub(1))
+        # v_check.assign(Qs.sub(1).riesz_representation())
+        # VTKFile("point_source.pvd").write(v_check)
+
+        # 'width' of delta, regularization
+        sources = [([xx,yy], mm) for (xx,yy,mm) in zip(df_moul.x,df_moul.y,df_moul.m)]
+        eps = df.Constant(1.5e3)  # should be slightly larger than grid resolution
+        # sum the kernels
+        x = df.SpatialCoordinate(self.mesh)
+        # Qm = 0
+        delta_moul = 0
+        Q_in = df.Constant(df_moul.m[0])  # assumes the same input for each moulin
+        for x0_val, Q_val in sources:
+            x0 = df.Constant(x0_val)
+            # Q_in  = df.Constant(Q_val)
+
+            r2 = df.dot(x - x0, x - x0)
+            # Normalized 2D kernel
+            delta_eps = (1 / (df.pi * eps**2)) * df.exp(-r2 / eps**2)
+
+            # Qm += Q_in * delta_eps
+            delta_moul += delta_eps
+
+        Qm_save = df.Function(self.V_phi)
+        Qm_save.interpolate(delta_moul)
+        VTKFile(self.results_dir+"point_source.pvd").write(Qm_save)
 
         # initial fields, default
         phi0 = self.phi0 = df.Function(self.V_phi)
@@ -94,11 +133,11 @@ class GLADS(object):
         dPds = df.dot(s,df.grad(P_w))
 
         # Edgewise flux
-        Q = -k_c*df.max_value(S,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
+        self.Q = Q = -k_c*df.max_value(S,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
         q_c = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
 
         # Sheet flux
-        q   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
+        q = self.q = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
 
         # Channel melt rates
         Chi = abs(Q*dphids) + abs(l_c*q_c*dphids)
@@ -117,15 +156,16 @@ class GLADS(object):
 
         # opening and closure for sheets and channels
         O   = df.max_value(u_b*(h_r - h)/l_r,0)
-        C   = A*h*abs(N)**(n-1)*N
+        C   = A*h*abs(N)**(n-1)*df.max_value(N,10000)
         O_c = (Chi-Pi) / (rho_i*L)
-        C_c = A*S*abs(N)**(n-1)*N
+        C_c = A*S*abs(N)**(n-1)*df.max_value(N,10000)
 
-        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q) + xsi * (O-C-m) ) * df.dx
+        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q) + xsi * (O-C-m) ) * df.dx(degree=3)
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
+        R_phi_M = - xsi*(-Am/(rho_w*g)*(phi-phi0)/dt + Q_in)*delta_moul*df.dx
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
-        self.F  = R_phi_h + R_phi_S + R_h + R_S
+        self.F  = R_phi_h + R_phi_S + R_h + R_S + R_phi_M
 
         # trick for saving Q
         # p       = df.TestFunction(V_S)
@@ -145,7 +185,11 @@ class GLADS(object):
 
     def write_variables_pvd(self,t):
         self.outfile_phi.write(df.project(self.U.sub(0), self.V_phi, name="phi"))
+        # qq = (self.q[0]**2+self.q[1]**2)**0.5
+        V_vec = df.VectorFunctionSpace(self.mesh, "CG", 1)
+        self.outfile_q.write(df.project(self.q, V_vec, name="q_s"))
         self.outfile_h.write(df.project(self.U.sub(1), self.V_h, name="h"))
+        self.outfile_N.write(df.project(self.N, self.V_phi, name="N"))
 
     def save_end_state(self, chk_file, csv_file):
         with CheckpointFile(chk_file, 'w') as afile:
