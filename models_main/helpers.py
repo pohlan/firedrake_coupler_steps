@@ -146,8 +146,8 @@ def scatterplt_fields(subfunctions, names, E_V, mesh, results_dir, dest_id):
         plt.colorbar()
         plt.savefig(results_dir+name+"_"+dest_id+".jpg")
 
-def get_coordinates(msh, el_str):
-    v = df.VectorFunctionSpace(msh, el_str, 0)
+def get_coordinates(msh, el_str, order):
+    v = df.VectorFunctionSpace(msh, el_str, order)
     X = df.assemble(df.interpolate(msh.coordinates,v))
     return X.dat.data_ro
 
@@ -170,8 +170,8 @@ def make_subDG0(mesh):
 
 def save_DGT0(mesh, submesh, f_DGT, f_subDG0, pvd_file, time):
     # get coordinates of dofs for both DGT0 and subDG0
-    crds_DGT0 = get_coordinates(mesh, "DGT")
-    crds_subDG0 = get_coordinates(submesh, "DG")  # doesn't need to be subm apparently
+    crds_DGT0 = get_coordinates(mesh, "DGT", 0)
+    crds_subDG0 = get_coordinates(submesh, "DG", 0)  # doesn't need to be subm apparently
     # loop through each coordinate of DGT0 and assign value to correct index of DG0 function
     for ((xi,yi),f_val) in zip(crds_DGT0,f_DGT.dat.data_ro):
         i = np.argmin(np.sqrt((xi - crds_subDG0[:,0])**2 + (yi - crds_subDG0[:,1])**2))  # due to rounding error np.where(xi==crds_subDG0[:,0] ...) doesn't work

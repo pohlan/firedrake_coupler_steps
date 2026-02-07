@@ -239,7 +239,7 @@ class GLADS(object):
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, p_s=0, l_c=10, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000, u_b=30):
+    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000, u_b=30, Am=10, df_moulins=None):
         s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
@@ -260,9 +260,9 @@ class GLADS(object):
         beta  = df.Constant(beta)        # -                 -- flux exponent
         h_r   = df.Constant(h_r)         # m                 -- bedrock bump height
         l_r   = df.Constant(l_r)         # m                 -- bedrock bump length
-        p_s   = df.Constant(p_s)         # -
-        l_c   = df.Constant(l_c)         # m                 -- englacial storage ratio
-        e_v   = df.Constant(e_v)
+        l_c   = df.Constant(l_c)         # m
+        e_v   = df.Constant(e_v)         # -                 -- englacial storage ratio
+        Am    = df.Constant(Am)          # m^2               -- moulin cross-sectional area
         q     = df.Constant(q)
         p     = df.Constant(p)
         beta2 = df.Constant(beta2)
@@ -303,6 +303,28 @@ class GLADS(object):
         self.coupler.U.sub(0).assign(phi0)
         self.coupler.U.sub(1).assign(h0)
         self.coupler.U.sub(2).assign(S0)
+
+        # moulin input (implemented with a delta dirac function)
+        if df_moulins is not None:
+            sources = [([xx,yy], mm) for (xx,yy,mm) in zip(df_moulins.x,df_moulins.y,df_moulins.m)]
+            eps = df.Constant(1.5e3)  # 'width' of delta, regularization; should be slightly larger than grid resolution (hard-wired for now)
+            x = df.SpatialCoordinate(self.mesh)
+            # Qm = 0
+            delta_moul = 0
+            Q_in = df.Constant(df_moulins.m[0])  # assumes the same input for each moulin
+            # sum delta diracs from each moulin
+            for x0_val, Q_val in sources:
+                x0 = df.Constant(x0_val)
+                # Q_in  = df.Constant(Q_val)
+                r2 = df.dot(x - x0, x - x0)   # squared distance to moulin
+                delta_eps = (1 / (df.pi * eps**2)) * df.exp(-r2 / eps**2)  # integrates to one with *dx
+                # Qm += Q_in * delta_eps
+                delta_moul += delta_eps
+
+            # save dirac function
+            Qm_save = df.Function(self.V_phi)
+            Qm_save.interpolate(delta_moul)
+            df.VTKFile(self.results_dir+"moulin_dirac.pvd").write(Qm_save)
 
         # edge-tangent unit vector
         normal = df.FacetNormal(self.mesh)
@@ -365,18 +387,20 @@ class GLADS(object):
 
         # opening and closure for sheets and channels
         O   = df.max_value(u_b*(h_r - h)/l_r,0)
-        # O   = df.max_value(u_b*(h_r - h)**(p_s+1)/l_r / h_r**p_s,0)
         # O = sum([p*(h_r/l_r)*u_b*Max(1 - h/h_r_i,0) for p,h_r_i in zip(probs,h_r_s)])
         C   = A*h*abs(N)**(n-1)*N
         O_c = (Chi-Pi) / (rho_i*L)
         C_c = A*S*abs(N)**(n-1)*N
 
         R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
-        R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS
+        R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS(degree=3)
+        R_phi_M = - xsi*(-Am/(rho_w*g)*(phi-phi0)/dt + Q_in)*delta_moul*df.dx(degree=3)
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
 
         self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
+        if df_moulins is not None:
+            self.coupler.R += R_phi_M
 
         # boundary conditions
         self.bcs = [df.DirichletBC(self.coupler.V.sub(0), rho_w*g*B, 1)] # id =1 --> part of boundary at the terminus

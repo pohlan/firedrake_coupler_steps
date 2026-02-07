@@ -16,7 +16,7 @@ mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
 x, y = df.SpatialCoordinate(mesh)
 
 # shmip
-shmip_suit = "A6"
+shmip_suit = "A1"
 shmip_m = {"A1" : 7.93e-11,
            "A2" : 1.59e-9,
            "A3" : 5.79e-9,
@@ -24,6 +24,7 @@ shmip_m = {"A1" : 7.93e-11,
            "A5" : 4.5e-8,
            "A6" : 5.79e-7}
 m = shmip_m[shmip_suit]*s_per_year
+shmip_suit = "B1"
 
 # geometry
 def surface(x,y):
@@ -42,18 +43,34 @@ timestep_reduction_fraction = 0.9
 hydro = GLADS(mesh, results_dir)
 coupler = Coupler(mesh,hydro)
 
+# read in location of moulins
+df_moul = pd.read_csv(f'/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/SHMIP_results/{shmip_suit}_M.csv', names=["idx","x","y","m"])
+# use closest nodes instead of exactly the coordinates in df_moul
+coords = hlp.get_coordinates(mesh, "CG", 1)
+meshx = coords[:,0]
+meshy = coords[:,1]
+xx = np.zeros(len(df_moul.x))
+yy = np.zeros(len(df_moul.y))
+i  = 0
+for (mx,my,Q_in) in zip(df_moul.x,df_moul.y,df_moul.m):
+    ii = np.argmin(np.sqrt((meshx-mx)**2+(meshy-my)**2))
+    xx[i] = meshx[ii]
+    yy[i] = meshy[ii]
+    i += 1
+df_moul2 = pd.DataFrame({"x":xx, "y":yy, "m":df_moul.m*s_per_year})
+
 # set geometries and variables
 B = df.Function(coupler.Q_cg).interpolate(bed(x,y))
 H = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
 coupler.set_geometry(B, H)
 hydro.set_coupler(coupler)
 hydro.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=0, u_b=1e-6*s_per_year, h_r=0.1, l_r=2, l_c=2, k_s=0.005, k_c=0.1)
+hydro.build_forms(m, dt0=dt0, e_v=0, u_b=1e-6*s_per_year, h_r=0.1, l_r=2, l_c=2, k_s=0.005, k_c=0.1, df_moulins=df_moul2)
 hlp.plot_geometry(coupler.B, coupler.H, mesh)
 
 # for initial state, take steady state solution from a different run
-chk_file    = results_dir + "initial_fields_A5.h5"
-csv_file    = results_dir + "initial_S_A5.csv"
+chk_file    = results_dir + "initial_fields_B4.h5"
+csv_file    = results_dir + "initial_S_B4.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -75,7 +92,7 @@ par = {"snes_type": "vinewtonrsls",
 
 # time stepping and solve
 t     = 0.0
-t_end = 50
+t_end = 30
 d     = 0   # days
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
