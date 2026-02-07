@@ -31,34 +31,29 @@ def h(x,para):
 def bed(x,y):
     return f(x,para) + g(y) * h(x,para)
 
-B_c = df.Function(coupler.Q_cg).interpolate(bed(x,y))
-H_c = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
-B_d = B_c
-H_d = H_c
+B = df.Function(coupler.Q_cg).interpolate(bed(x,y))
+H = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
 
 thklim = 0
 thklim = 10
-Htemp = H_c.vector().get_local()
+Htemp = H.vector().get_local()
 Htemp[Htemp<thklim] = thklim
 # Htemp[np.isnan(Htemp)] = thklim
-H_c.vector().set_local(Htemp)
-Htemp = H_d.vector().get_local()
-Htemp[Htemp<thklim] = thklim
-H_d.vector().set_local(Htemp)
+H.vector().set_local(Htemp)
 
 ################
 fig, axes = plt.subplots()
-cl = tripcolor(B_c, axes=axes)
+cl = tripcolor(B, axes=axes)
 fig.colorbar(cl)
 plt.savefig(f"{results_dir}B.jpg")
 # thickness
 fig, axes = plt.subplots()
-cl = tripcolor(H_c, axes=axes)
+cl = tripcolor(H, axes=axes)
 fig.colorbar(cl)
 plt.savefig(f"{results_dir}H.jpg")
 ################
 
-coupler.set_geometry(B_c,B_d,H_c,H_d)
+coupler.set_geometry(B,H)
 
 stokes.set_coupler(coupler)
 stokes.build_variables(p=0.6,q=0.6,beta2=140,results_dir=results_dir)

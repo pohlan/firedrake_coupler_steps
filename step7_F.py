@@ -67,7 +67,7 @@ def get_dt(m):
 hydro = GLADS(mesh, results_dir)
 hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v)
 
-hlp.plot_geometry(hydro)
+hlp.plot_geometry(hydro.B, hydro.H, mesh)
 
 # for initial state, take steady state solution from a different run  (make sure it is the steady state for E1 and m=7.93e-11 not the default m)
 chk_file    =  "step_5/initial_fields_E1.h5"

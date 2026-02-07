@@ -1,0 +1,37 @@
+#!/bin/bash
+# chmod u+x step10b_input.sh
+
+target_directory='parameter_runs/'
+
+# determine the number of already started runs by counting the number of directories, than add 1 to get new run_index
+num_directories=$(find "$target_directory" -maxdepth 1 -mindepth 1 -type d -name "run_*" | wc -l)
+# run_index=$((num_directories+1))
+run_index=71
+
+# make a new directory and copy this file so that the input parameters are recorded at the start of the simulation
+new_dir=$target_directory'run_'$run_index/
+mkdir $new_dir
+cp step10b_input.sh $new_dir'input_run'$run_index'.sh'
+
+# parameters
+e_v=0.0001
+l_r=5
+h_r=1.0
+k_s=0.03
+k_c=0.5
+l_c=10
+beta2=7e5
+p=1.2
+q=0.5
+transition=true
+alpha=1.25
+omega=0.0005
+sig_topo=15
+melt_input='avg'
+
+# run the model
+options="--e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha $alpha --omega $omega --sig_topo $sig_topo --melt_input $melt_input"
+if [ "$transition" = true ]; then
+  options="$options --transition"
+fi
+python -u step10b_russel_coupled.py $options
