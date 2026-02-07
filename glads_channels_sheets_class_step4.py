@@ -1,10 +1,12 @@
 import firedrake as df
-from models_main.hydro_class import GLADS
+from models_main.coupled_model import GLADS, Coupler
 import models_main.helpers as hlp
 from firedrake.checkpointing import CheckpointFile
 import numpy as np
+import pandas as pd
 
 s_per_day = 3600 * 24
+s_per_year = s_per_day*365
 results_dir = 'step_4/'
 
 # mesh
@@ -21,7 +23,7 @@ shmip_m = {"A1" : 7.93e-11,
            "A4" : 2.5e-8,
            "A5" : 4.5e-8,
            "A6" : 5.79e-7}
-m = shmip_m[shmip_suit]
+m = shmip_m[shmip_suit]*s_per_year
 
 # geometry
 def surface(x,y):
@@ -30,58 +32,65 @@ def bed(x,y):
     return 0
 
 # time stepping
-dt0 = s_per_day*0.01
-dt_max = s_per_day*45
-dt_min = s_per_day*1e-5
-timestep_increase_fraction = 1.1
-timestep_reduction_fraction = 0.5
+dt0 = 0.01/365
+dt_max = 5/365
+dt_min = 1e-3/365
+timestep_increase_fraction = 1.05
+timestep_reduction_fraction = 0.9
 
 # hydro object
 hydro = GLADS(mesh, results_dir)
-hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y))
+coupler = Coupler(mesh,hydro)
 
-hlp.plot_geometry(hydro.B, hydro.H, mesh)
-
+# set geometries and variables
+B = df.Function(coupler.Q_cg).interpolate(bed(x,y))
+H = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
+coupler.set_geometry(B, H)
+hydro.set_coupler(coupler)
+hydro.build_variables()
+hydro.build_forms(m, dt0=dt0, e_v=0, u_b=1e-6*s_per_year, h_r=0.1, l_r=2, l_c=2, k_s=0.005, k_c=0.1)
+hlp.plot_geometry(coupler.B, coupler.H, mesh)
 
 # for initial state, take steady state solution from a different run
-# chk_file    = results_dir + "initial_fields_A1.h5"
-# with CheckpointFile(chk_file, 'r') as afile:
-#     mesh_ = afile.load_mesh()
-#     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
-#     hydro.set_initial_h(afile.load_function(mesh_, "h"))
+chk_file    = results_dir + "initial_fields_A5.h5"
+csv_file    = results_dir + "initial_S_A5.csv"
+with CheckpointFile(chk_file, 'r') as afile:
+    mesh_ = afile.load_mesh()
+    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+    hydro.set_initial_h(afile.load_function(mesh_, "h"))
+hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 # hydro.set_initial_S(10 * np.random.rand(len(hydro.U.sub(2).vector()[:])))
-
-hydro.set_initial_S(20*(1-x/100e3))
+# hydro.set_initial_S(60*(1-x/100e3))
+# hydro.set_initial_S(1.0)
 
 # solver options
 par = {"snes_type": "vinewtonrsls",
        "pc_factor_mat_solver_type": "mumps",
        "snes_rtol": 1e-5,
-       "snes_atol": 1e-5,
-       "snes_max_it": 1000,
+       "snes_atol": 1e0,
+       "snes_max_it": 100,
        "report": True,
        "snes_monitor": None,
        "error_on_nonconvergence": True}
 
 # time stepping and solve
 t     = 0.0
-t_end = s_per_day*365*100
+t_end = 50
+d     = 0   # days
 while (t <= t_end):
     dt = float(hydro.dt.values()[0])
-    print([t / (3600*24*365), dt / s_per_day])
+    print("Time = {:.2f} years, dt = {:.1f} days".format(t, dt*365))
     if dt < dt_min:
         print("Minimal time step reached. Simulation failed.")
         break
     try:
-        df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
+        df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=par)
         hydro.update_time_variables()
         t += dt
         hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
-        hydro.write_variables_pvd(t)
-
-        # Doug's trick to save Q
-        # df.solve(F_Q == 0, dQ)
-        # outfile_Q.write(df.project(dQ, V_S, name="Q"))
+        if int(t*365) >= d+2:
+            d = int(t*365)
+            hydro.write_variables_pvd(t)
 
     except df.exceptions.ConvergenceError:
         # If solver fails, try again with a smaller time step
@@ -95,8 +104,8 @@ csv_file_save = results_dir + "initial_S_"+shmip_suit+".csv"
 hydro.save_end_state(chk_file_save, csv_file_save)
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-hlp.scatterplt_fields(hydro.U.subfunctions, ["phi", "h", "S"], hydro.E_V, mesh, results_dir, shmip_suit)
+hlp.scatterplt_fields(coupler.U.subfunctions, ["phi", "h", "S"], coupler.E_V, mesh, results_dir, shmip_suit)
 
 # test against GlaDS-matlab SHMIP results
-fl = "SHMIP_results/mw/"+shmip_suit+"_mw.nc"
-hlp.diff_to_glads_matlab(hydro, fl)
+# fl = "SHMIP_results/mw/"+shmip_suit+"_mw.nc"
+# hlp.diff_to_glads_matlab(hydro, fl)

@@ -1,6 +1,4 @@
 import firedrake as df
-from firedrake.__future__ import interpolate
-from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
 from firedrake.pyplot import tripcolor, triplot
 import xarray as xr
@@ -139,14 +137,46 @@ def scatterplt_fields(subfunctions, names, E_V, mesh, results_dir, dest_id):
     for (field, name, element) in zip(subfunctions, names, E_V.sub_elements):
         # get dof coordinates
         Vmesh = df.VectorFunctionSpace(mesh, element)
-        X = df.assemble(interpolate(mesh.coordinates,Vmesh))
+        X = df.assemble(df.interpolate(mesh.coordinates,Vmesh))
         meshx = X.dat.data[:,0]
         meshy = X.dat.data[:,1]
         # scatter plot
         plt.figure()
-        plt.scatter(meshx, meshy, 10, field.vector()[:])
+        plt.scatter(meshx, meshy, 10, field.dat.data_ro)
         plt.colorbar()
         plt.savefig(results_dir+name+"_"+dest_id+".jpg")
+
+def get_coordinates(msh, el_str):
+    v = df.VectorFunctionSpace(msh, el_str, 0)
+    X = df.assemble(df.interpolate(msh.coordinates,v))
+    return X.dat.data_ro
+
+def make_subDG0(mesh):
+    mdim = mesh.topological_dimension()
+    assert mdim == 2
+    # generate DGT0 function
+    DGT0 = df.FunctionSpace(mesh, "DGT", 0)
+    # generate the skeleton submesh, i.e. nodes and edges, but not cells
+    #   reference:  https://github.com/firedrakeproject/firedrake/blob/5144bf85ee557d62d87d6844bd82d39ccdfc4389/tests/firedrake/submesh/test_submesh_interpolate.py#L195
+    facet_function = df.Function(DGT0).interpolate(df.Constant(1.))
+    facet_value = 999
+    mesh = df.RelabeledMesh(mesh, [facet_function], [facet_value])
+    subm = df.Submesh(mesh, mdim - 1, facet_value)
+    # DG0 function from submesh
+    subDG0 = df.FunctionSpace(subm, "DG", 0)
+    assert DGT0.dim() == subDG0.dim()         # same dimension but different dof ordering
+    f_subDG0 = df.Function(subDG0)
+    return f_subDG0, subm
+
+def save_DGT0(mesh, submesh, f_DGT, f_subDG0, pvd_file, time):
+    # get coordinates of dofs for both DGT0 and subDG0
+    crds_DGT0 = get_coordinates(mesh, "DGT")
+    crds_subDG0 = get_coordinates(submesh, "DG")  # doesn't need to be subm apparently
+    # loop through each coordinate of DGT0 and assign value to correct index of DG0 function
+    for ((xi,yi),f_val) in zip(crds_DGT0,f_DGT.dat.data_ro):
+        i = np.argmin(np.sqrt((xi - crds_subDG0[:,0])**2 + (yi - crds_subDG0[:,1])**2))  # due to rounding error np.where(xi==crds_subDG0[:,0] ...) doesn't work
+        f_subDG0.dat.data[i] = f_val
+    pvd_file.write(f_subDG0, time=time)
 
 def diff_to_glads_matlab(hydro, file):
     ds_mw = xr.open_dataset(file)
@@ -154,7 +184,7 @@ def diff_to_glads_matlab(hydro, file):
     y_mw = ds_mw.coords1.data[1]
     # hard-codes that phi and h have the same dofs
     V_mesh = df.VectorFunctionSpace(hydro.mesh, hydro.E_V.sub_elements[0])
-    X = df.assemble(interpolate(hydro.mesh.coordinates, V_mesh))
+    X = df.assemble(df.interpolate(hydro.mesh.coordinates, V_mesh))
     meshx = X.dat.data[:,0]
     meshy = X.dat.data[:,1]
 
@@ -169,6 +199,6 @@ def diff_to_glads_matlab(hydro, file):
     # also save GlaDS-matlab as pvd to visualize in paraview
     shmip_suit = os.path.basename(file)[0:2]
     F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy), method="nearest") # the default method, linear, gives nan values at the edges of the domain
-    VTKFile(shmip_suit+"_glads-matlab_phi.pvd").write(df.project(910*9.8*hydro.H - F_mw + 1000*9.8*hydro.B, hydro.V_phi, name="phi"))
+    df.VTKFile(shmip_suit+"_glads-matlab_phi.pvd").write(df.project(910*9.8*hydro.H - F_mw + 1000*9.8*hydro.B, hydro.V_phi, name="phi"))
     F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.h.data[0], (meshx,meshy), method="nearest")
-    VTKFile(shmip_suit+"_glads-matlab_h.pvd").write(df.project(F_mw, hydro.V_phi, name="h"))
+    df.VTKFile(shmip_suit+"_glads-matlab_h.pvd").write(df.project(F_mw, hydro.V_phi, name="h"))
