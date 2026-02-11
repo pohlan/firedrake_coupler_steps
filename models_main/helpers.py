@@ -116,6 +116,21 @@ def melt_fct_avg(hydro, H):
     m.vector()[:] = melt[:,0]
     return m, calc_m
 
+def moulin_dirac_from_array(mesh, x_moulins, y_moulins, M_moulins):
+    sources = [([xx,yy], mm) for (xx,yy,mm) in zip(x_moulins, y_moulins, M_moulins)]
+    eps = df.Constant(1.5e3)  # 'width' of delta, regularization; should be slightly larger than grid resolution (hard-wired for now)
+    x = df.SpatialCoordinate(mesh)
+    Qm = 0
+    delta_moul = 0
+    for x0_val, Q_val in sources:
+        x0 = df.Constant(x0_val)
+        Q_in  = df.Constant(Q_val)
+        r2 = df.dot(x - x0, x - x0)   # squared distance to moulin
+        delta_eps = (1 / (df.pi * eps**2)) * df.exp(-r2 / eps**2)  # integrates to one with *dx
+        Qm += Q_in * delta_eps
+        delta_moul += df.Constant(1.0) * delta_eps
+    return Qm, delta_moul
+
 def plot_geometry(B, H, mesh):
     # bed
     fig, axes = plt.subplots()

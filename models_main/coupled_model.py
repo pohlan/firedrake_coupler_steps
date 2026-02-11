@@ -214,6 +214,7 @@ class GLADS(object):
         self.results_dir = results_dir
         self.outfile_phi = df.VTKFile(results_dir+'df_phi.pvd')
         self.outfile_N   = df.VTKFile(results_dir+'df_N.pvd')
+        self.outfile_Qm  = df.VTKFile(results_dir+'df_Qm.pvd')
         self.outfile_h   = df.VTKFile(results_dir+'df_h.pvd')
         self.outfile_q   = df.VTKFile(results_dir+'df_q.pvd')
         self.outfile_S   = df.VTKFile(results_dir+'df_S.pvd')
@@ -239,7 +240,7 @@ class GLADS(object):
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha=1.25, beta=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000, u_b=30, Am=10, df_moulins=None):
+    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha_s=1.25, beta_s=1.5, p=1, q=1, beta2=140,Uhat=1,Nhat=1, transition=False, omega=1/2000, u_b=30, Am=10, moulins=False): #, Qm=0, delta_moul=0):
         s_per_year = 60**2*24*365
         # physical constants
         rho_i = self.coupler.rho_i
@@ -250,14 +251,16 @@ class GLADS(object):
         L     = self.coupler.L
         ct    = self.coupler.ct
         cw    = self.coupler.cw
-        nu    = self.coupler.nu
+        nu    = self.coupler.nu*s_per_year
 
         # parameters
         k_s   = df.Constant(k_s*s_per_year)       # m^(7/4) kg^(-1/2) -- sheet conductivity
         # k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s*s_per_year)
         k_c   = df.Constant(k_c*s_per_year)       # m^(3/2) kg^(-1/2) -- channel conductivity
-        alpha = df.Constant(alpha)       # -                 -- flux exponent
-        beta  = df.Constant(beta)        # -                 -- flux exponent
+        alpha_s = df.Constant(alpha_s)       # -             -- flux exponent
+        alpha_c = df.Constant(1.25)
+        beta_s  = df.Constant(beta_s)        # -                 -- flux exponent
+        beta_c  = df.Constant(1.5)
         h_r   = df.Constant(h_r)         # m                 -- bedrock bump height
         l_r   = df.Constant(l_r)         # m                 -- bedrock bump length
         l_c   = df.Constant(l_c)         # m
@@ -305,26 +308,9 @@ class GLADS(object):
         self.coupler.U.sub(2).assign(S0)
 
         # moulin input (implemented with a delta dirac function)
-        if df_moulins is not None:
-            sources = [([xx,yy], mm) for (xx,yy,mm) in zip(df_moulins.x,df_moulins.y,df_moulins.m)]
-            eps = df.Constant(1.5e3)  # 'width' of delta, regularization; should be slightly larger than grid resolution (hard-wired for now)
-            x = df.SpatialCoordinate(self.mesh)
-            # Qm = 0
-            delta_moul = 0
-            Q_in = df.Constant(df_moulins.m[0])  # assumes the same input for each moulin
-            # sum delta diracs from each moulin
-            for x0_val, Q_val in sources:
-                x0 = df.Constant(x0_val)
-                # Q_in  = df.Constant(Q_val)
-                r2 = df.dot(x - x0, x - x0)   # squared distance to moulin
-                delta_eps = (1 / (df.pi * eps**2)) * df.exp(-r2 / eps**2)  # integrates to one with *dx
-                # Qm += Q_in * delta_eps
-                delta_moul += delta_eps
-
-            # save dirac function
-            Qm_save = df.Function(self.V_phi)
-            Qm_save.interpolate(delta_moul)
-            df.VTKFile(self.results_dir+"moulin_dirac.pvd").write(Qm_save)
+        if moulins:
+            Qm = self.Qm = df.Function(self.V_phi)
+            delta_moul = self.delta_moul = df.Function(self.V_phi)
 
         # edge-tangent unit vector
         normal = df.FacetNormal(self.mesh)
@@ -340,17 +326,21 @@ class GLADS(object):
         dPds = df.dot(s,df.grad(self.P_w))
 
         # edgewise flux
-        Q   = self.Q = -k_c*df.max_value(S,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
-        q_c = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(dphids**2, 1e-15)**(beta/2.-1)*dphids
+        Q   = self.Q = -k_c*df.max_value(S,1e-15)**alpha_c*df.max_value(dphids**2, 1e-15)**(beta_c/2.-1)*dphids
 
         # sheet flux
         if transition:
             # Tim Hill's transition model laminar/turbulent
             gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
-            self.q_s = q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
+            self.q_s = q_s = -nu/(2*omega) * (h_r/h)**(3-2*alpha_s) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha_s)*k_s*h**3*gradphi))*df.grad(phi)/gradphi
+            # sheet flux along edges
+            gradphi_edge = df.max_value(df.dot(dphids,dphids),1e-15)**(1/2)
+            q_c = -nu/(2*omega) * (h_r/h)**(3-2*alpha_s) * (-1+df.sqrt(1+4*omega/nu*(h/h_r)**(3-2*alpha_s)*k_s*h**3*gradphi_edge))*dphids/gradphi_edge
         else:
             # 'original' GlaDS
-            self.q_s = q_s   = -k_s*df.max_value(h,1e-15)**alpha*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta/2.-1)*df.grad(phi)
+            self.q_s = q_s   = -k_s*df.max_value(h,1e-15)**alpha_s*df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta_s/2.-1)*df.grad(phi)
+            # sheet flux along edges
+            q_c = -k_s*df.max_value(h,1e-15)**alpha_s*df.max_value(dphids**2, 1e-15)**(beta_s/2.-1)*dphids
         # save Reynolds number for visualization
         self.Re = q_s/nu
 
@@ -392,14 +382,17 @@ class GLADS(object):
         O_c = (Chi-Pi) / (rho_i*L)
         C_c = A*S*abs(N)**(n-1)*N
 
+        # weak form residuals
         R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
         R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS(degree=3)
-        R_phi_M = - xsi*(-Am/(rho_w*g)*(phi-phi0)/dt + Q_in)*delta_moul*df.dx(degree=3)
         R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
         R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS + S*w*df.ds # last term is to enforse S = 0 at boundary edges
-
+        # add them all up
         self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
-        if df_moulins is not None:
+
+        # add moulin term if applicable
+        if moulins:
+            R_phi_M = - xsi*(-Am/(rho_w*g)*(phi-phi0)/dt*delta_moul + Qm)*df.dx(degree=3)
             self.coupler.R += R_phi_M
 
         # boundary conditions
@@ -414,8 +407,10 @@ class GLADS(object):
         self.S0.assign(self.coupler.U.sub(2))
 
     def write_variables_pvd(self,t):
-        self.outfile_phi.write(df.project(self.coupler.U.sub(0), self.V_phi, name="phi"), time=t)
+        # self.outfile_phi.write(df.project(self.coupler.U.sub(0), self.V_phi, name="phi"), time=t)
+        self.outfile_phi.write(df.project(self.P_w/(self.coupler.rho_i*self.coupler.g*self.coupler.H), self.V_phi, name="pw_pi"), time=t)
         self.outfile_N.write(df.project(self.N, self.V_phi, name="N"), time=t)
+        # self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)
         self.outfile_h.write(df.project(self.coupler.U.sub(1), self.V_h, name="h"), time=t)
         self.outfile_q.write(df.project(self.q_s, self.V_cg_vec, name="q"), time=t)
         hlp.save_DGT0(self.mesh, self.S_submesh, self.coupler.U.sub(2), self.S_save, self.outfile_S, t)
