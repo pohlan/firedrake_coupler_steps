@@ -1,16 +1,12 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
 import firedrake as df
-from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
-# from models_main.hydro_class import GLADS, Coupler
-from models_main.coupled_model import GLADS, SpecFO, Coupler
+from models_main.coupled_model import GLADS, SpecFO, Coupler_Flow_Hydro, Coupler_Hydro
 import models_main.helpers as hlp
 import numpy as np
-import pandas as pd
-
 import geoutils as gu
-from firedrake.__future__ import interpolate
+import pandas as pd
 
 s_per_day = 3600 * 24
 results_dir = 'step_10b/results/'
@@ -18,7 +14,7 @@ data_dir    = 'Greenland_data/'
 
 # parameters
 m          = 1e-16 # constant melt input (m/yr)
-sig        = 0     # amount of smoothing for bed/thickness input (0=no smoothing)
+sig        = 10     # amount of smoothing for bed/thickness input (0=no smoothing)
 
 # mesh
 # mesh_file = data_dir+'western_med_v2.msh'
@@ -35,7 +31,7 @@ timestep_reduction_fraction = 0.5
 # geometry
 V = df.FunctionSpace(mesh, "CG", 1)
 v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
-X = df.assemble(interpolate(mesh.coordinates,v_dg))
+X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
 meshx = X.dat.data_ro[:,0]
 meshy = X.dat.data_ro[:,1]
 B = df.Function(V)
@@ -49,32 +45,33 @@ else:  # higher sigma == more smoothing
     r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
     r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
 # interpolate onto mesh
-B.dat.data[:] = r_bed.interp_points((meshx, meshy))
-H.dat.data[:] = r_thk.interp_points((meshx, meshy))
+# print(r_bed.interp_points((meshx, meshy)))
+B.dat.data[:] = r_bed.interp_points((meshx, meshy), as_array=True)
+H.dat.data[:] = r_thk.interp_points((meshx, meshy), as_array=True)
 
 # make bed elevation and thickness the same at bc points of individual outlets
 bc_nodes = V.boundary_nodes(1)
 for i in range(0,len(bc_nodes),2):
     nodes = bc_nodes[i:i+2]
-    B.vector()[nodes] = np.mean(B.vector()[nodes])
-    H.vector()[nodes] = np.mean(H.vector()[nodes])
+    B.dat.data[nodes] = np.mean(B.dat.data_ro[nodes])
+    H.dat.data[nodes] = np.mean(H.dat.data_ro[nodes])
 
 # set minimum ice thickness to 10
 thklim = 0
 thklim = 10
-Htemp = H.vector().get_local()
+Htemp = H.dat.data[:]
 Htemp[Htemp<thklim] = thklim
-H.vector().set_local(Htemp)
+H.dat.data[:] = Htemp
 
 # initiate classes with updated mesh
 hydro   = GLADS(mesh, results_dir)
 stokes  = SpecFO(mesh, results_dir)
-# coupler = Coupler(mesh, hydro)
-coupler = Coupler(mesh, stokes, hydro)
+coupler = Coupler_Flow_Hydro(mesh, stokes, hydro)
+# coupler = Coupler_Hydro(mesh, hydro)
 
 # Convenience functions for calculating the N scale
 ones = df.Function(coupler.Q_cg)
-ones.vector()[:] = 1.
+ones.dat.data[:] = 1.
 area = df.assemble(ones*df.dx)
 H_mean = df.assemble(H*df.dx)/area
 Uhat   = df.Constant(50)
@@ -98,9 +95,9 @@ Nhat   = df.Constant(917*9.81*H_mean)
 #     m.vector()[:] = SMB_.vector()[:]
 
 # f_melt = VTKFile(results_dir+"m0_per_year.pvd").write(m)
-f_B = VTKFile(results_dir+"B.pvd").write(B)
-f_H = VTKFile(results_dir+"H.pvd").write(H)
-f_N = VTKFile(results_dir+"N.pvd")
+f_B = df.VTKFile(results_dir+"B.pvd").write(B)
+f_H = df.VTKFile(results_dir+"H.pvd").write(H)
+f_N = df.VTKFile(results_dir+"N.pvd")
 N   = df.Function(coupler.Q_cg)
 
 # set geometries and variables
@@ -110,20 +107,21 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-hydro.build_forms(m, dt0=dt0, e_v=1e-3, h_r=0.1, k_c=0.1, k_s=0.01, l_c=2, l_r=2, transition=False)
-stokes.build_forms(beta2=7e5, q=0.5, p=0.5, Nhat=Nhat, Uhat=Uhat)
+hydro.build_forms(m, dt0=dt0, e_v=1e-4, h_r=0.5, k_c=0.5, k_s=0.05, l_c=10, l_r=10, transition=True)
+# hydro.build_forms(m, dt0=dt0, e_v=1e-4, h_r=1.0, k_c=0.5, k_s=0.03, l_c=10, l_r=10, transition=True, u_b=100)
+stokes.build_forms(beta2=1e6, q=1.0, p=1.2, Nhat=Nhat, Uhat=Uhat)
 
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.01)
-# chk_file = f"step_10b/results/initial_fields_russel_base_melt_smooth_new.h5"
-# csv_file = f"step_10b/results/initial_S_russel_base_melt_smooth_new.csv"
-# chk_file = args.data_directory + "russel/initial_fields_russel_base_melt.h5"
-# csv_file = args.data_directory + "russel/initial_S_russel_base_melt.csv"
-# with CheckpointFile(chk_file, 'r') as afile:
-#     mesh_ = afile.load_mesh()
-#     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
-#     hydro.set_initial_h(afile.load_function(mesh_, "h"))
-# hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
+# chk_file = f"step_10b/results/initial_fields_russel_base_melt_sig{sig}.h5"
+# csv_file = f"step_10b/results/initial_S_russel_base_melt_sig{sig}.csv"
+chk_file = results_dir + f"initial_fields_russel_hydro_sig{sig}_Rada.h5"
+csv_file = results_dir + f"initial_S_russel_hydro_sig{sig}_Rada.csv"
+with CheckpointFile(chk_file, 'r') as afile:
+    mesh_ = afile.load_mesh()
+    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+    hydro.set_initial_h(afile.load_function(mesh_, "h"))
+hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 
 
 solver_params = {#"snes_linesearch_type": "l2",#newton
@@ -159,16 +157,22 @@ while (t <= t_end):
 
     except df.exceptions.ConvergenceError:
         # If solver fails, try again with a smaller time step
-        coupler.U.sub(4).assign(hydro.phi0)
-        coupler.U.sub(5).assign(hydro.h0)
-        coupler.U.sub(6).assign(hydro.S0)
         hydro.dt.assign(dt*timestep_reduction_fraction)
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
 # save end states for future initialization
-chk_file_save = results_dir + f"initial_fields_russel_base_melt_sig{sig}.h5"
-csv_file_save = results_dir + f"initial_S_russel_base_melt_sig{sig}.csv"
+# chk_file_save = results_dir + f"initial_fields_russel_coupled_sig{sig}.h5"
+# csv_file_save = results_dir + f"initial_S_russel_coupled_sig{sig}.csv"
+# hydro.save_end_state(chk_file_save, csv_file_save)
+
+# chk_file_save = results_dir + f"initial_fields_russel_hydro_sig{sig}_Rada.h5"
+# csv_file_save = results_dir + f"initial_S_russel_hydro_sig{sig}_Rada.csv"
+# hydro.save_end_state(chk_file_save, csv_file_save)
+
+chk_file_save = results_dir + f"initial_fields_russel_coupled_sig{sig}_Rada.h5"
+csv_file_save = results_dir + f"initial_S_russel_coupled_sig{sig}_Rada.csv"
 hydro.save_end_state(chk_file_save, csv_file_save)
+
 
 # make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
 # hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, "russel")

@@ -1,9 +1,8 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
 import firedrake as df
-from firedrake.output import VTKFile
 from firedrake.checkpointing import CheckpointFile
-from models_main.coupled_model import GLADS, SpecFO, Coupler
+from models_main.coupled_model import GLADS, SpecFO, Coupler_Flow_Hydro
 import models_main.helpers as hlp
 import numpy as np
 import pandas as pd
@@ -12,7 +11,6 @@ import pandas as pd
 # import rasterio as rio
 # from scipy.ndimage import gaussian_filter
 import geoutils as gu
-from firedrake.__future__ import interpolate
 
 s_per_hour = 3600
 s_per_day  = s_per_hour * 24
@@ -46,7 +44,7 @@ mesh = df.Mesh(mesh_file)
 # for (k,crd) in enumerate(hydro_coords):
 #     i_pts = np.argpartition(np.sqrt((crd[0]-meshx_div[exterior_nodes])**2+(crd[1]-meshy_div[exterior_nodes])**2), n_lines+1)[:(n_lines+1)]
 #     i_pts.sort(axis=0)
-#     edgefunc.vector()[exterior_nodes[i_pts[0:n_lines]]] = 1
+#     edgefunc.dat.data[exterior_nodes[i_pts[0:n_lines]]] = 1
 # mesh     = df.RelabeledMesh(mesh, [edgefunc], [1])
 
 # time stepping
@@ -62,7 +60,7 @@ def get_dt(m):
 # geometry
 V = df.FunctionSpace(mesh, "CG", 1)
 v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
-X = df.assemble(interpolate(mesh.coordinates,v_dg))
+X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
 meshx = X.dat.data_ro[:,0]
 meshy = X.dat.data_ro[:,1]
 B = df.Function(V)
@@ -77,31 +75,31 @@ else:  # higher sigma == more smoothing
     r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
     r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
 # interpolate onto mesh
-B.dat.data[:] = r_bed.interp_points((meshx, meshy))
-H.dat.data[:] = r_thk.interp_points((meshx, meshy))
+B.dat.data[:] = r_bed.interp_points((meshx, meshy), as_array=True)
+H.dat.data[:] = r_thk.interp_points((meshx, meshy), as_array=True)
 S = B.dat.data[:] + H.dat.data[:] # surface elevation
 
 # set minimum ice thickness to 10
 thklim = 0
 thklim = 10
-Htemp = H.vector().get_local()
+Htemp = H.dat.data[:]
 Htemp[Htemp<thklim] = thklim
-H.vector().set_local(Htemp)
+H.dat.data[:] = Htemp
 
 # make bed elevation and thickness the same at bc points of individual outlets
 bc_nodes = V.boundary_nodes(1)
 for i in range(0,len(bc_nodes),2):
     nodes = bc_nodes[i:i+2]
-    B.vector()[nodes] = np.mean(B.vector()[nodes])
-    H.vector()[nodes] = np.mean(H.vector()[nodes])
+    B.dat.data[nodes] = np.mean(B.dat.data_ro[nodes])
+    H.dat.data[nodes] = np.mean(H.dat.data_ro[nodes])
 
 # initiate classes with updated mesh
 hydro   = GLADS(mesh, results_dir)
 stokes  = SpecFO(mesh, results_dir)
-coupler = Coupler(mesh, stokes, hydro)
+coupler = Coupler_Flow_Hydro(mesh, stokes, hydro)
 
 # melt input to hydro model
-f_melt = VTKFile(results_dir+"m0_per_year.pvd")
+f_melt = df.VTKFile(results_dir+"m0_per_year.pvd")
 if args.melt_input == "KAN":
     m, calc_m = hlp.melt_fct_KAN(hydro, S, data_dir)
 elif args.melt_input == "MAR":
@@ -111,15 +109,15 @@ elif args.melt_input == "avg":
 
 # Convenience functions for calculating the N scale
 ones = df.Function(coupler.Q_cg)
-ones.vector()[:] = 1.
+ones.dat.data[:] = 1.
 area = df.assemble(ones*df.dx)
 H_mean = df.assemble(H*df.dx)/area
 Uhat   = df.Constant(50)
 Nhat   = df.Constant(917*9.81*H_mean)
 
-f_B = VTKFile(results_dir+"B.pvd").write(B)
-f_H = VTKFile(results_dir+"H.pvd").write(H)
-f_N = VTKFile(results_dir+"N.pvd")
+f_B = df.VTKFile(results_dir+"B.pvd").write(B)
+f_H = df.VTKFile(results_dir+"H.pvd").write(H)
+f_N = df.VTKFile(results_dir+"N.pvd")
 N   = df.Function(coupler.Q_cg)
 
 # set geometries and variables
@@ -130,17 +128,19 @@ hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
 # dt0=get_dt(max(melt[:,0]))
-dt0= 10*hour
-hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition) #, alpha=args.alpha, omega=args.omega)
+dt0= 2*hour
 stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
+hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor)
 
 x, y = df.SpatialCoordinate(mesh)
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.1)
-chk_file = f"step_10b/results/initial_fields_russel_base_melt_sig{sig}.h5"
-csv_file = f"step_10b/results/initial_S_russel_base_melt_sig{sig}.csv"
+# chk_file = f"step_10b/results/initial_fields_russel_base_melt_sig{sig}.h5"
+# csv_file = f"step_10b/results/initial_S_russel_base_melt_sig{sig}.csv"
+chk_file = f"step_10b/results/initial_fields_russel_coupled_sig{sig}.h5"
+csv_file = f"step_10b/results/initial_S_russel_coupled_sig{sig}.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -176,7 +176,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
 
     while (t <= t_end):
         dt = float(hydro.dt.values()[0])
-        print(np.max(hydro.m.vector()[:]))
+        print(np.max(hydro.m.dat.data_ro))
         print("Time = {:.2f} years, dt = {:.1f} hours".format(t, dt*365*24))
         if dt < dt_min:
             # write failure to table
@@ -197,7 +197,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             f_N.write(N.interpolate(hydro.N))
             hydro.update_time_variables()
             t += dt
-            dt_max = get_dt(np.max(hydro.m.vector()[:]))
+            dt_max = get_dt(np.max(hydro.m.dat.data_ro))
             hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
             if int(t*365) >= d+2:
                 d = int(t*365)
@@ -205,8 +205,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 stokes.write_variables_pvd(t)
                 afile.save_function(stokes.Us, idx=i, name="Us")
                 afile.save_function(stokes.Ub, idx=i, name="Ub")
-                afile.save_function(coupler.U.sub(4), idx=i, name="phi")
-                afile.save_function(coupler.U.sub(5), idx=i, name="h")
+                afile.save_function(coupler.U.sub(0), idx=i, name="phi")
+                afile.save_function(coupler.U.sub(1), idx=i, name="h")
                 i += 1
                 # if args.transition:
                 #     # save Reynolds number
@@ -215,9 +215,9 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
 
         except df.exceptions.ConvergenceError:
             # If solver fails, try again with a smaller time step
-            coupler.U.sub(4).assign(hydro.phi0)
-            coupler.U.sub(5).assign(hydro.h0)
-            coupler.U.sub(6).assign(hydro.S0)
+            coupler.U.sub(0).assign(hydro.phi0)
+            coupler.U.sub(1).assign(hydro.h0)
+            coupler.U.sub(2).assign(hydro.S0)
             hydro.dt.assign(dt*timestep_reduction_fraction)
             print("Convergence not achieved.  Reducing time step to {:.1f} hours and trying again".format(hydro.dt.values()[0]*365*24))
 
