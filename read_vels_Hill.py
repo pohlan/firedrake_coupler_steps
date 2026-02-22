@@ -6,8 +6,11 @@ import pandas as pd
 from firedrake.checkpointing import CheckpointFile
 from datetime import datetime, timedelta
 
+dir = "step_11b/"
+
 # load model files
-with CheckpointFile(f"step_10c_trans_32/time_series.h5", 'r') as afile:
+# with CheckpointFile(f"step_10c_trans_32/time_series.h5", 'r') as afile:
+with CheckpointFile(f"{dir}time_series.h5", 'r') as afile:
     mesh = afile.load_mesh()
     V = df.FunctionSpace(mesh, "CG", 1)
     v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
@@ -41,4 +44,4 @@ for (i,(xi,yi)) in enumerate(coords):
     # plt.xlim(365,2*365)
     plt.ylim(0,1.5)
     plt.legend()
-plt.savefig(f"step_10c_trans_32/time_series.jpg")
+plt.savefig(f"{dir}time_series.jpg")

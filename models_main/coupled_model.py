@@ -212,6 +212,7 @@ class GLADS(object):
 
         # create output files
         self.results_dir = results_dir
+        self.outfile_m   = df.VTKFile(results_dir+'df_m.pvd')
         self.outfile_phi = df.VTKFile(results_dir+'df_phi.pvd')
         self.outfile_pw_pi = df.VTKFile(results_dir+'df_pw_pi.pvd')
         self.outfile_N   = df.VTKFile(results_dir+'df_N.pvd')
@@ -412,16 +413,18 @@ class GLADS(object):
         self.S0.assign(self.coupler.U.sub(2))
 
     def write_variables_pvd(self,t):
+        self.outfile_m.write(df.project(self.m, self.V_phi, name="m"), time=t)
         self.outfile_phi.write(df.project(self.coupler.U.sub(0), self.V_phi, name="phi"), time=t)
         self.outfile_pw_pi.write(df.project(self.P_w/(self.coupler.rho_i*self.coupler.g*self.coupler.H), self.V_phi, name="pw_pi"), time=t)
         self.outfile_N.write(df.project(self.N, self.V_phi, name="N"), time=t)
-        # self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)
-        # self.outfile_Qm.write(df.project(self.M_fr, self.V_phi, name="friction"), time=t)
         self.outfile_h.write(df.project(self.coupler.U.sub(1), self.V_h, name="h"), time=t)
         self.outfile_q.write(df.project(self.q_s, self.V_cg_vec, name="q"), time=t)
         self.outfile_Re.write(df.project(self.Re, self.V_h, name="Re"))
         hlp.save_DGT0(self.mesh, self.S_submesh, self.coupler.U.sub(2), self.S_save, self.outfile_S, t)
         hlp.save_DGT0(self.mesh, self.Q_submesh, df.project(abs(self.Q),self.V_S), self.Q_save, self.outfile_Q, t)
+        # self.outfile_Qm.write(df.project(self.M_fr, self.V_phi, name="friction"), time=t)
+        if self.moulins:
+            self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)
 
     def save_end_state(self, chk_file, csv_file):
         with CheckpointFile(chk_file, 'w') as afile:
@@ -465,6 +468,7 @@ class SHAKTI(object):
         self.outfile_K   = df.VTKFile(results_dir+results_dir[:-1]+'_K.pvd')
         self.outfile_N   = df.VTKFile(results_dir+results_dir[:-1]+'_N.pvd')
         self.outfile_ratio = df.VTKFile(results_dir+results_dir[:-1]+'_ratio.pvd')
+        self.outfile_Qm  = df.VTKFile(results_dir+results_dir[:-1]+'_Qm.pvd')
 
     def set_coupler(self,coupler):
         self.coupler = coupler
@@ -482,7 +486,7 @@ class SHAKTI(object):
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
 
-    def build_forms(self, m, e_v=1e-4, dt0=1e-4, h_r=0.1, l_r=2, omega=1e-3, u_b=30):
+    def build_forms(self, m, e_v=1e-4, dt0=1e-4, h_r=0.1, l_r=2, omega=1e-3, u_b=30, Am=10, moulins=False):
         s_per_year = df.Constant(60**2*24*365)
         # physical constants
         rho_i = self.coupler.rho_i
@@ -502,6 +506,7 @@ class SHAKTI(object):
         e_v   = df.Constant(e_v)
         omega = df.Constant(omega)     # - -- controlling nonlinear transition between laminar/turbulent
         G     = df.Constant(0.0)     # W/m^2 -- geothermal heat flux
+        Am    = df.Constant(Am)
         # A     = df.Constant(5e-25*s_per_year)  # Pa^(-3) s^(-1)
 
         # source term
@@ -532,6 +537,12 @@ class SHAKTI(object):
         # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
         self.coupler.U.sub(0).assign(phi0)
         self.coupler.U.sub(1).assign(h0)
+
+        # moulin input (implemented with a delta dirac function)
+        self.moulins = moulins
+        if moulins:
+            Qm = self.Qm = df.Function(self.V_phi)
+            delta_moul = self.delta_moul = df.Function(self.V_phi)
 
         # physical equations #
 
@@ -579,6 +590,11 @@ class SHAKTI(object):
         # R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
         self.coupler.R  += R_phi_h + R_h
 
+        # add moulin term if applicable
+        if moulins:
+            R_phi_M = - xsi*(-Am/(rho_w*g)*(phi-phi0)/dt*delta_moul + Qm)*df.dx(degree=3)
+            self.coupler.R += R_phi_M
+
         # boundary conditions
         self.bcs = [df.DirichletBC(self.coupler.V.sub(0), rho_w*g*B, 1)] # id =1 --> left boundary
 
@@ -596,6 +612,8 @@ class SHAKTI(object):
         self.outfile_K.write(df.project(self.K, self.V_phi, name="K"),time=t)
         self.outfile_N.write(df.project(self.N, self.V_phi, name="N"),time=t)
         self.outfile_ratio.write(df.project(self.ratio, self.V_phi, name="ratio_efficient"),time=t)
+        if self.moulins:
+            self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)
 
     def save_end_state(self, chk_file):
         with CheckpointFile(chk_file, 'w') as afile:
