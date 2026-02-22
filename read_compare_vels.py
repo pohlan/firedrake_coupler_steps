@@ -1,7 +1,5 @@
 import os
 import firedrake as df
-from firedrake.__future__ import interpolate
-from firedrake.output import VTKFile
 from firedrake.pyplot import tripcolor, triplot
 import xarray as xr
 import geoutils as gu
@@ -14,22 +12,22 @@ from firedrake.checkpointing import CheckpointFile
 from datetime import datetime, timedelta
 import re
 
-run_index = 71
+run_index = 114
 
 # load model files
 with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as afile:
     mesh = afile.load_mesh()
     V = df.FunctionSpace(mesh, "CG", 1)
     v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
-    X = df.assemble(interpolate(mesh.coordinates,v_dg))
+    X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
     meshx = X.dat.data_ro[:,0]
     meshy = X.dat.data_ro[:,1]
     n_idx = len(afile.get_timestepping_history(mesh, "phi")['index'])
     phi_model = np.zeros((len(meshx), n_idx))
     Us_model = np.zeros((len(meshx), n_idx))
     for i in range(n_idx):
-        phi_model[:,i] = afile.load_function(mesh, "phi", idx=i).vector()[:]
-        Us_model[:,i]  = afile.load_function(mesh, "Us", idx=i).vector()[:]
+        phi_model[:,i] = afile.load_function(mesh, "phi", idx=i).dat.data_ro
+        Us_model[:,i]  = afile.load_function(mesh, "Us", idx=i).dat.data_ro
 
 # generate time vector
 start_date = datetime(2016, 1, 1)
@@ -64,7 +62,7 @@ for (i,f) in enumerate(sorted_files[:n_months]):
     r = gu.Raster(f"{vel_dir}{f}")
     delta = r.res[0]*2
     r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
-    Us_obs[:,i] = r.interp_points((meshx,meshy))
+    Us_obs[:,i] = r.interp_points((meshx,meshy), as_array=True)
 
 # def plot_vel(k):
 #     B = df.Function(V)

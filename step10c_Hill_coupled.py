@@ -1,6 +1,6 @@
 import firedrake as df
 from firedrake.checkpointing import CheckpointFile
-from models_main.coupled_model import GLADS, Coupler
+from models_main.coupled_model import GLADS, Coupler_Hydro
 import models_main.helpers as hlp
 import numpy as np
 import pandas as pd
@@ -29,7 +29,7 @@ def get_dt(m):
 
 # initiate classes
 hydro   = GLADS(mesh, results_dir)
-coupler = Coupler(mesh, hydro)
+coupler = Coupler_Hydro(mesh, hydro)
 coupler.A.assign(2.4e-24) # a bit lower than e.g. in SHMIP
 
 # geometry
@@ -104,15 +104,16 @@ hlp.plot_geometry(coupler.B, coupler.H, mesh)
 # initial melt input to moulins
 DG0 = df.FunctionSpace(mesh_c, "DG", 0)
 m_input = df.Function(DG0).interpolate(runoff(0))
-M_moulins = np.zeros(len(df_moul.x))
-for i in range(len(M_moulins)):
-    M_moulins[i] = df.assemble(m_input*dx_c(i))
-Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
-hydro.Qm.interpolate(Qm)
-hydro.delta_moul.interpolate(delta_moul)
-Qm_save = df.Function(hydro.V_phi)
-Qm_file = df.VTKFile(results_dir+"moulin_dirac.pvd")
 m_file = df.VTKFile(results_dir+"m_input.pvd")
+if hydro.moulins:
+    M_moulins = np.zeros(len(df_moul.x))
+    for i in range(len(M_moulins)):
+        M_moulins[i] = df.assemble(m_input*dx_c(i))
+    Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
+    hydro.Qm.interpolate(Qm)
+    hydro.delta_moul.interpolate(delta_moul)
+    Qm_save = df.Function(hydro.V_phi)
+    Qm_file = df.VTKFile(results_dir+"moulin_dirac.pvd")
 
 # initialize fields
 chk_file = "step_10c_trans_54/initial_fields_hill.h5"
@@ -150,15 +151,17 @@ with df.CheckpointFile(f"{results_dir}time_series.h5", 'w') as afile:
             break
         try:
             m_input.interpolate(runoff(t))
-
-            for ii in range(len(M_moulins)):
-                M_moulins[ii] = df.assemble(m_input*dx_c(ii))
-
-            Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
-            hydro.Qm.interpolate(Qm)
-            Qm_save.interpolate(Qm)
-            Qm_file.write(Qm_save, time=t)
             m_file.write(m_input, time=t)
+
+            if hydro.moulins:
+                for ii in range(len(M_moulins)):
+                    M_moulins[ii] = df.assemble(m_input*dx_c(ii))
+                Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
+                hydro.Qm.interpolate(Qm)
+                Qm_save.interpolate(Qm)
+                Qm_file.write(Qm_save, time=t)
+            else:
+                hydro.m.interpolate(m_input)
 
             df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
             hydro.update_time_variables()

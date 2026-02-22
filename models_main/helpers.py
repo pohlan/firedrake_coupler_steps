@@ -20,7 +20,9 @@ def get_args():
     parser.add_argument('--l_r', type=float, default=5, help='bump spacing')
     parser.add_argument('--transition', action='store_true', help='laminar turbulent transition')
     parser.add_argument('--omega',type=float, default=1/2000)
-    parser.add_argument('--alpha', type=float, default=1.25)
+    parser.add_argument('--alpha_s', type=float, default=1.25)
+    parser.add_argument('--beta_s', type=float, default=1.5)
+    parser.add_argument('--As_factor', type=float, default=2, help='A*As_factor/n^n')
     parser.add_argument('--l_c', type=float, default=10, help='sheet width below channel')
     parser.add_argument('--e_v', type=float, default=1e-4, help='englacial void ratio')
     parser.add_argument('--beta2', type=float, default=1e6, help='basal traction')
@@ -36,7 +38,7 @@ def save_params_to_csv(args, params_output_file, success=True):
     df_params = pd.DataFrame({"run_index":[args.run_index], "success":[success],
                               "k_s":[args.k_s], "k_c":[args.k_c], "h_r":[args.h_r], "l_r":[args.l_r], "l_c":[args.l_c], "e_v":[args.e_v],
                               "beta2":[args.beta2], "p":[args.p], "q":[args.q],
-                              "transition":[args.transition], "alpha":[args.alpha], "omega":[args.omega],
+                              "transition":[args.transition], "alpha_s":[args.alpha_s], "beta_s":[args.beta_s], "omega":[args.omega], "As_factor":[args.As_factor],
                               "sig_topo":[args.sig_topo],"melt_input":[args.melt_input]})
     if os.path.exists(params_output_file):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)
@@ -65,10 +67,10 @@ def melt_fct_KAN(hydro, S, data_dir):
         return melt
     def calc_m(t):
         day = t*365
-        hydro.m.vector()[:] = np.array([calc_melt(day, z) for z in S])
+        hydro.m.dat.data[:] = np.array([calc_melt(day, z) for z in S])
     # first time step
     m = df.Function(hydro.V_phi)
-    m.vector()[:] = np.array([calc_melt(0.0, z) for z in S])
+    m.dat.data[:] = np.array([calc_melt(0.0, z) for z in S])
     return m, calc_m
 
 def melt_fct_MAR(hydro, H, meshx, meshy, coupler):
@@ -81,39 +83,39 @@ def melt_fct_MAR(hydro, H, meshx, meshy, coupler):
     b_0 = year_0*12
     b_end = b_0 + n_years*12
     i_months = range(b_0,b_end+1)
-    melt = np.zeros((len(H.vector()[:]), len(i_months)))  # will interpolate onto same mesh as H
+    melt = np.zeros((len(H.dat.data[:]), len(i_months)))  # will interpolate onto same mesh as H
     for (n,i) in enumerate(i_months):
-          melt[:,n] = r.interp_points((meshx, meshy), band=i) / coupler.rho_w * 12
+          melt[:,n] = r.interp_points((meshx, meshy), band=i, as_array=True) / coupler.rho_w * 12
     def calc_m(t):
         month = t*12
         month_floor = int(np.floor(month))
         month_ceil = int(np.ceil(month))
         floor_weight = month_ceil - month
         ceil_weight = month - month_floor
-        hydro.m.vector()[:] = melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
+        hydro.m.dat.data[:] = melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
     # first time step
     m = df.Function(hydro.V_phi)
-    m.vector()[:] = melt[:,0]
+    m.dat.data[:] = melt[:,0]
     return m, calc_m
 
 def melt_fct_avg(hydro, H):
-    melt = np.zeros((len(H.vector()[:]), 12))
+    melt = np.zeros((len(H.dat.data[:]), 12))
     for i in range(12):
         fenics_smb_file = f"Greenland_data/russel/SMB_fenics/SMB_{i}.h5"
         with CheckpointFile(fenics_smb_file, 'r') as afile:
             mesh_ = afile.load_mesh()
             SMB_ = df.Function(hydro.V_phi).interpolate(afile.load_function(mesh_, "SMB"))
-            melt[:,i] = SMB_.vector()[:]
+            melt[:,i] = SMB_.dat.data_ro
     def calc_m(t):
         month = (t%1)*12
         month_floor = int(np.floor(month))
         month_ceil = int(np.ceil(month))
         floor_weight = month_ceil - month
         ceil_weight = month - month_floor
-        hydro.m.vector()[:] = melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
+        hydro.m.dat.data[:] = melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
     # first time step
     m = df.Function(hydro.V_phi)
-    m.vector()[:] = melt[:,0]
+    m.dat.data[:] = melt[:,0]
     return m, calc_m
 
 def moulin_dirac_from_array(mesh, x_moulins, y_moulins, M_moulins):
@@ -206,14 +208,14 @@ def diff_to_glads_matlab(hydro, file):
     F_mw = df.Function(hydro.V_phi)
     F_diff = df.Function(hydro.V_phi)
     for (f_mw, F_sol) in zip([ds_mw.N, ds_mw.h], [hydro.N, hydro.U.sub(1)]):
-        F_mw.vector()[:] = itp.griddata((x_mw,y_mw), f_mw.data[0], (meshx,meshy), method="nearest")
+        F_mw.dat.data[:] = itp.griddata((x_mw,y_mw), f_mw.data[0], (meshx,meshy), method="nearest")
         F_diff.interpolate(F_mw-F_sol)
-        print(np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])))
+        print(np.max(np.abs(F_diff.dat.data[:]/F_mw.dat.data[:])))
         # assert np.max(np.abs(F_diff.vector()[:]/F_mw.vector()[:])) < 0.05
 
     # also save GlaDS-matlab as pvd to visualize in paraview
     shmip_suit = os.path.basename(file)[0:2]
-    F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy), method="nearest") # the default method, linear, gives nan values at the edges of the domain
+    F_mw.dat.data[:] = itp.griddata((x_mw,y_mw), ds_mw.N.data[0], (meshx,meshy), method="nearest") # the default method, linear, gives nan values at the edges of the domain
     df.VTKFile(shmip_suit+"_glads-matlab_phi.pvd").write(df.project(910*9.8*hydro.H - F_mw + 1000*9.8*hydro.B, hydro.V_phi, name="phi"))
-    F_mw.vector()[:] = itp.griddata((x_mw,y_mw), ds_mw.h.data[0], (meshx,meshy), method="nearest")
+    F_mw.dat.data[:] = itp.griddata((x_mw,y_mw), ds_mw.h.data[0], (meshx,meshy), method="nearest")
     df.VTKFile(shmip_suit+"_glads-matlab_h.pvd").write(df.project(F_mw, hydro.V_phi, name="h"))
