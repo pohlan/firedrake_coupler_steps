@@ -61,15 +61,17 @@ class SpecFO(object):
     def build_variables(self):
         n = self.coupler.n
 
-        self.ubar = self.coupler.U[3]
-        self.vbar = self.coupler.U[4]
-        self.udef = self.coupler.U[5]
-        self.vdef = self.coupler.U[6]
+        i_u0 = len(self.coupler.hydro.elements)
 
-        self.lamdabar_x = self.coupler.Lambda[3]
-        self.lamdabar_y = self.coupler.Lambda[4]
-        self.lamdadef_x = self.coupler.Lambda[5]
-        self.lamdadef_y = self.coupler.Lambda[6]
+        self.ubar = self.coupler.U[i_u0]
+        self.vbar = self.coupler.U[i_u0+1]
+        self.udef = self.coupler.U[i_u0+2]
+        self.vdef = self.coupler.U[i_u0+3]
+
+        self.lamdabar_x = self.coupler.Lambda[i_u0]
+        self.lamdabar_y = self.coupler.Lambda[i_u0+1]
+        self.lamdadef_x = self.coupler.Lambda[i_u0+2]
+        self.lamdadef_y = self.coupler.Lambda[i_u0+3]
 
         # TEST FUNCTION COEFFICIENTS
         coef  = [lambda s:1.0, lambda s:1./(n+1)*((n+2)*s**(n+1) - 1)]
@@ -81,7 +83,9 @@ class SpecFO(object):
         lamda_y_ = [self.lamdabar_y, self.lamdadef_y]
 
         self.u       = VerticalBasis(u_,coef,dcoef)
+        # self.u0      = VerticalBasis(u_,coef,dcoef)
         self.v       = VerticalBasis(v_,coef,dcoef)
+        # self.v0      = VerticalBasis(v_,coef,dcoef)
         self.lamda_x = VerticalBasis(lamda_x_,coef,dcoef)
         self.lamda_y = VerticalBasis(lamda_y_,coef,dcoef)
 
@@ -100,6 +104,7 @@ class SpecFO(object):
         # scale ice flow constant to get velocities in m/a not m/s
         s_per_year = 3600*24*365
         Be         = (self.coupler.A*s_per_year)**(-1/n) # Pa^(-n) a^(-1)
+        # A          = self.coupler.A*s_per_year
         Uhat = self.Uhat = df.Constant(Uhat)
         Nhat = self.Nhat = df.Constant(Nhat)
         # ice flow specific constants
@@ -174,9 +179,21 @@ class SpecFO(object):
         # INSTANTIATE VERTICAL INTEGRATOR
         vi = VerticalIntegrator(points,weights)
 
+        # Budd sliding law
         tau_bx = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
         tau_by = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
         # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
+
+        # Coulomb, Hewitt 2013 / Schoof 2005
+        # mu_b = df.Constant(0.5)
+        # lambda_b = df.Constant(1.0)
+        # eps_u = df.Constant(1e-2)
+        # eps_N = df.Constant(1e4)
+        # u_b = self.u_b = df.sqrt(self.u0(1)**2 + self.v0(1)**2 + eps_u**2) # note, this is the velocity from the previous time step, necessary to keep the Jacobian reasonable..
+        # N_eff = df.sqrt(self.coupler.hydro.N0**2 + eps_N**2)
+        # f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b)+eps_u)**(1/n)
+        # tau_bx = f * u(1)/(u_b+eps_u)
+        # tau_by = f * v(1)/(u_b+eps_u)
 
         R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3)
         R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3)
@@ -242,6 +259,12 @@ class GLADS(object):
         self.phi = self.coupler.U[0]
         self.P_w = self.phi - rho_w * g * B
         self.N   = rho_i * g * H - self.P_w
+        # self.N0  = self.N
+
+        # self.phi0 = df.Function(self.V_phi)
+        # self.N0  = rho_i*g*H - (self.phi0 - rho_w*g*B)      # needed in Coulomb sliding law
+        # self.h0   = df.Function(self.V_h)
+        # self.S0   = df.Function(self.V_S)
 
     def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha_s=1.25, beta_s=1.5, As_factor=2, transition=False, omega=1/2000, u_b=30, Am=10, moulins=False):
         s_per_year = df.Constant(60**2*24*365)
@@ -419,7 +442,7 @@ class GLADS(object):
         self.outfile_N.write(df.project(self.N, self.V_phi, name="N"), time=t)
         self.outfile_h.write(df.project(self.coupler.U.sub(1), self.V_h, name="h"), time=t)
         self.outfile_q.write(df.project(self.q_s, self.V_cg_vec, name="q"), time=t)
-        self.outfile_Re.write(df.project(self.Re, self.V_h, name="Re"))
+        self.outfile_Re.write(df.project(self.Re, self.V_h, name="Re"), time=t)
         hlp.save_DGT0(self.mesh, self.S_submesh, self.coupler.U.sub(2), self.S_save, self.outfile_S, t)
         hlp.save_DGT0(self.mesh, self.Q_submesh, df.project(abs(self.Q),self.V_S), self.Q_save, self.outfile_Q, t)
         # self.outfile_Qm.write(df.project(self.M_fr, self.V_phi, name="friction"), time=t)
@@ -463,6 +486,7 @@ class SHAKTI(object):
         # create output files
         self.results_dir = results_dir
         self.outfile_phi = df.VTKFile(results_dir+results_dir[:-1]+'_phi.pvd')
+        self.outfile_pw_pi = df.VTKFile(results_dir+results_dir[:-1]+'pw_pi.pvd')
         self.outfile_h   = df.VTKFile(results_dir+results_dir[:-1]+'_h.pvd')
         self.outfile_q   = df.VTKFile(results_dir+results_dir[:-1]+'_q.pvd')
         self.outfile_K   = df.VTKFile(results_dir+results_dir[:-1]+'_K.pvd')
@@ -493,8 +517,8 @@ class SHAKTI(object):
         rho_w = self.coupler.rho_w
         g     = self.coupler.g
         n     = self.coupler.n
-        # A     = df.Constant(self.coupler.A*s_per_year * 2 / n**n)
-        A     = df.Constant(5e-25*s_per_year)
+        A     = df.Constant(self.coupler.A*s_per_year * 2 / n**n)
+        # A     = df.Constant(5e-25*s_per_year)  # used in SHMIP
         L     = self.coupler.L
         ct    = self.coupler.ct
         cw    = self.coupler.cw
@@ -507,7 +531,6 @@ class SHAKTI(object):
         omega = df.Constant(omega)     # - -- controlling nonlinear transition between laminar/turbulent
         G     = df.Constant(0.0)     # W/m^2 -- geothermal heat flux
         Am    = df.Constant(Am)
-        # A     = df.Constant(5e-25*s_per_year)  # Pa^(-3) s^(-1)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
@@ -573,6 +596,11 @@ class SHAKTI(object):
         # same result: Hill transition model with k_s=46
         # k_s = df.Constant(46)
         # self.q = q = s_per_year * (-nu/(2*omega) * (-1 + df.sqrt(1+4*omega/nu*k_s*h**3*gradphi))*df.grad(phi)/gradphi)
+        # turbulent GlaDS kind of flow
+        # k_s = df.Constant(0.005)
+        # alpha_s = 1.25
+        # beta_s = 1.5
+        # self.q = q = s_per_year*(-k_s*Max(h,1e-15)**alpha_s*Max(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta_s/2.-1)*df.grad(phi))
 
         # calculate K for visualization
         self.Re = Max(df.dot(q,q),1e-15)**(1/2)/nu
@@ -607,6 +635,7 @@ class SHAKTI(object):
 
     def write_variables_pvd(self,t):
         self.outfile_phi.write(df.project(self.coupler.U.sub(0), self.V_phi, name="phi"),time=t)
+        self.outfile_pw_pi.write(df.project(self.P_w/(self.coupler.rho_i*self.coupler.g*self.coupler.H), self.V_phi, name="pw_pi"), time=t)
         self.outfile_h.write(df.project(self.coupler.U.sub(1), self.V_h, name="h"),time=t)
         self.outfile_q.write(df.project(Max(df.dot(self.q,self.q),1e-15)**(1/2), self.V_h, name="q"),time=t)
         self.outfile_K.write(df.project(self.K, self.V_phi, name="K"),time=t)

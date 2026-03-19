@@ -3,12 +3,11 @@ os.environ['OMP_NUM_THREADS'] = '1'
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
-
-import firedrake as df
-from firedrake.__future__ import interpolate
-from firedrake.output import VTKFile
+from datetime import datetime, timedelta
+import geopandas as gpd
+from shapely.geometry import Point
 import geoutils as gu
+
 import statsmodels.api as sm
 
 df_L = pd.read_csv("Greenland_data/forcing/KAN_L_day.csv")
@@ -42,8 +41,47 @@ z_U = np.array(df_U.alt)
 
 # also make a smoother version with lowess filter
 lowess = sm.nonparametric.lowess
-T_L_smooth = lowess(T_L, time, frac=1/200, xvals=time)
+T_L_smooth = lowess(T_L, time, frac=1/110, xvals=time)
 
+# save as csv
 data_dir = 'Greenland_data/'
 dff = pd.DataFrame({'dT_days':dT_days, 'T_L': T_L, 'T_L_smooth':T_L_smooth, 'z_L': z_L})
 dff.to_csv(data_dir+'KAN_melt.csv',index=False)
+
+# calculate melt from temperature to visualize
+f_m = 0.01*365
+melt = f_m*np.array([np.max([0,T]) for T in T_L])
+melt_smooth = f_m*np.array([np.max([0, T]) for T in T_L_smooth])
+
+# plot
+plt.plot(time, melt, label="original KAN", alpha=0.5)
+plt.plot(time, melt_smooth, label="smooth KAN")
+plt.xlim((datetime(2016, 1, 1), datetime(2020, 12, 31)))
+
+L_point = Point(np.mean(df_L.lon), np.mean(df_L.lat))
+
+# L_points = gpd.points_from_xy(x=df_L.lon, y=df_L.lat, crs=4326)
+L_gdf = gpd.GeoDataFrame(geometry=[L_point], crs=4326)
+L_gdf.to_crs(3413, inplace=True)
+x_L = L_gdf.geometry.x[0]
+y_L = L_gdf.geometry.y[0]
+
+r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
+delta = r.res[0]*5
+r.crop([x_L-delta, y_L-delta, x_L+delta, y_L+delta], inplace=True)
+year_0  = 2016 - 1940 # starts in 1940
+n_years = 5
+b_0 = year_0*12
+b_end = b_0 + n_years*12
+i_months = range(b_0,b_end+1)
+# melt = np.zeros((len(H.dat.data[:]), len(i_months)))  # will interpolate onto same mesh as H
+melt_MAR = np.zeros(len(i_months))
+for (n,i) in enumerate(i_months):
+    melt_MAR[n] = r.interp_points((x_L, y_L), band=i, as_array=True)[0] / 1000 * 12
+
+start_date = datetime(2016, 1, 1)
+time_MAR = [start_date + timedelta(days=k*30) for k in range(len(melt_MAR))]
+plt.plot(time_MAR, melt_MAR, label="monthly MAR")
+plt.legend()
+
+plt.savefig("KAN_smoothing.jpg", dpi=300)

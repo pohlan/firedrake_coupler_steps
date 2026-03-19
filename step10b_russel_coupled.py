@@ -4,6 +4,7 @@ import firedrake as df
 from firedrake.checkpointing import CheckpointFile
 from models_main.coupled_model import GLADS, SpecFO, Coupler_Flow_Hydro
 import models_main.helpers as hlp
+from models_main.russel_catchments import get_catchments_russel
 import numpy as np
 import pandas as pd
 # import fiona
@@ -22,7 +23,7 @@ results_dir = args.results_directory+"/run_{}/".format(args.run_index)
 params_output_file = args.results_directory+"parameter_runs.csv"
 
 # mesh
-mesh_file = data_dir+'russel/russel.msh'
+mesh_file = data_dir+'russel/russel_hole.msh'
 mesh = df.Mesh(mesh_file)
 # x, y = df.SpatialCoordinate(mesh)
 
@@ -55,7 +56,7 @@ timestep_reduction_fraction = 0.5
 day = 1/365
 hour = day/24
 def get_dt(m):
-    return max(2.0*hour, 20*hour + hour*(2.0-20)/(10-1e-14) * (m-1e-14))
+    return max(2.0*hour, 10*hour + hour*(2.0-10)/(10-1e-14) * (m-1e-14))
 
 # geometry
 V = df.FunctionSpace(mesh, "CG", 1)
@@ -93,10 +94,22 @@ for i in range(0,len(bc_nodes),2):
     B.dat.data[nodes] = np.mean(B.dat.data_ro[nodes])
     H.dat.data[nodes] = np.mean(H.dat.data_ro[nodes])
 
+# save geometries
+f_B = df.VTKFile(results_dir+"B.pvd").write(B)
+f_H = df.VTKFile(results_dir+"H.pvd").write(H)
+
 # initiate classes with updated mesh
 hydro   = GLADS(mesh, results_dir)
 stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler_Flow_Hydro(mesh, stokes, hydro)
+
+# Convenience functions for calculating the N scale
+ones = df.Function(coupler.Q_cg)
+ones.dat.data[:] = 1.
+area = df.assemble(ones*df.dx)
+H_mean = df.assemble(H*df.dx)/area
+Uhat   = df.Constant(50)
+Nhat   = df.Constant(917*9.81*H_mean)
 
 # melt input to hydro model
 f_melt = df.VTKFile(results_dir+"m0_per_year.pvd")
@@ -107,18 +120,27 @@ elif args.melt_input == "MAR":
 elif args.melt_input == "avg":
     m, calc_m = hlp.melt_fct_avg(hydro, H)
 
-# Convenience functions for calculating the N scale
-ones = df.Function(coupler.Q_cg)
-ones.dat.data[:] = 1.
-area = df.assemble(ones*df.dx)
-H_mean = df.assemble(H*df.dx)/area
-Uhat   = df.Constant(50)
-Nhat   = df.Constant(917*9.81*H_mean)
+# moulins
+df_moul, facet_functions = get_catchments_russel(mesh)
 
-f_B = df.VTKFile(results_dir+"B.pvd").write(B)
-f_H = df.VTKFile(results_dir+"H.pvd").write(H)
-f_N = df.VTKFile(results_dir+"N.pvd")
-N   = df.Function(coupler.Q_cg)
+# get moulin coordinates that are exactly on the nodes
+coords = hlp.get_coordinates(mesh, "CG", 1)
+meshx = coords[:,0]
+meshy = coords[:,1]
+x_moulin = np.zeros(len(df_moul.x))
+y_moulin = np.zeros(len(df_moul.y))
+id_mesh = np.zeros(len(df_moul.y), dtype=int)
+i  = 0
+for (mx,my) in zip(df_moul.x,df_moul.y):
+    ii = np.argmin(np.sqrt((meshx-mx)**2+(meshy-my)**2))
+    x_moulin[i] = meshx[ii]
+    y_moulin[i] = meshy[ii]
+    id_mesh[i] = ii
+    i += 1
+
+# make subdomain for each moulin catchment for RelabeledMesh
+mesh_c = df.RelabeledMesh(mesh, facet_functions, list(range(len(facet_functions))))
+dx_c   = df.dx(domain=mesh_c)
 
 # set geometries and variables
 coupler.set_geometry(B, H)
@@ -130,7 +152,23 @@ stokes.build_variables()
 # dt0=get_dt(max(melt[:,0]))
 dt0= 2*hour
 stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
-hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor)
+hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
+
+# initial melt input to moulins
+calc_m(0)
+DG0 = df.FunctionSpace(mesh_c, "DG", 0)
+m_DG0 = df.Function(DG0).interpolate(hydro.m)
+m_CG1 = df.Function(coupler.Q_cg)
+# m_file = df.VTKFile(results_dir+"m_input.pvd")
+if hydro.moulins:
+    M_moulins = np.zeros(len(df_moul.x))
+    for i in range(len(M_moulins)):
+        M_moulins[i] = df.assemble(m_DG0*dx_c(i))
+    Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
+    hydro.Qm.interpolate(Qm)
+    hydro.delta_moul.interpolate(delta_moul)
+    # Qm_save = df.Function(hydro.V_phi)
+    Qm_file = df.VTKFile(results_dir+"moulin_dirac.pvd")
 
 x, y = df.SpatialCoordinate(mesh)
 # hydro.set_initial_phi(0.0)
@@ -147,7 +185,6 @@ with CheckpointFile(chk_file, 'r') as afile:
     hydro.set_initial_h(afile.load_function(mesh_, "h"))
 hydro.set_initial_S(np.float64(pd.read_csv(csv_file).S))
 
-
 solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_type":"newtonls",
                  "pc_factor_mat_solver_type": "mumps", # ?
@@ -158,17 +195,10 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_monitor": None,
                  "error_on_nonconvergence": True}
 
-# Hack to save Re to file (doesn't work, shape incompatibility..?)
-# if args.transition:
-#     Re_file = df.File(results_dir+'Re.pvd'.format(args.run_index))
-#     phi_Re = df.TestFunction(coupler.Q_dg)
-#     dRe = df.Function(coupler.Q_dg)
-#     R_Re = (dRe - abs(hydro.Re))*phi_Re*df.dx
-
 # time stepping and solve
 t       = 0.0
 d       = 0    # count the days
-t_end   = 4
+t_end   = 3
 success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)
@@ -176,7 +206,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
 
     while (t <= t_end):
         dt = float(hydro.dt.values()[0])
-        print(np.max(hydro.m.dat.data_ro))
+        print(np.max(m_CG1.dat.data_ro))
         print("Time = {:.2f} years, dt = {:.1f} hours".format(t, dt*365*24))
         if dt < dt_min:
             # write failure to table
@@ -184,9 +214,21 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             print("Minimal time step reached. Simulation failed.")
             break
         try:
-            calc_m(t)
-            m.interpolate(hydro.m)
-            f_melt.write(m, time=t)
+            # interpolate spatially resolved surface runoff
+            m_CG1.dat.data[:] = calc_m(t)
+            f_melt.write(m_CG1, time=t)
+
+            if hydro.moulins:
+                m_DG0.interpolate(m_CG1)
+                # distribute m_input to moulins
+                for ii in range(len(M_moulins)):
+                    M_moulins[ii] = df.assemble(m_DG0*dx_c(ii))
+                Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
+                hydro.Qm.interpolate(Qm)
+                # Qm_save.interpolate(Qm)
+                Qm_file.write(hydro.Qm, time=t)
+            else:
+                hydro.m.interpolate(m_CG1)
 
             # Downs et al variable sheet conductivity
             # kmin = df.Constant(1e-3*s_per_day*365)
@@ -194,10 +236,11 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             # hydro.k_s.interpolate((kmax-kmin)/25 * hydro.m + kmin)
 
             df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
-            f_N.write(N.interpolate(hydro.N))
             hydro.update_time_variables()
+            # stokes.u0 = stokes.u
+            # stokes.v0 = stokes.v
             t += dt
-            dt_max = get_dt(np.max(hydro.m.dat.data_ro))
+            dt_max = get_dt(np.max(m_CG1.dat.data_ro))
             hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
             if int(t*365) >= d+2:
                 d = int(t*365)
@@ -207,11 +250,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 afile.save_function(stokes.Ub, idx=i, name="Ub")
                 afile.save_function(coupler.U.sub(0), idx=i, name="phi")
                 afile.save_function(coupler.U.sub(1), idx=i, name="h")
+                afile.save_function(m_CG1, idx=i, name="m")
                 i += 1
-                # if args.transition:
-                #     # save Reynolds number
-                #     df.solve(R_Re == 0, dRe, solver_parameters=solver_params)
-                #     Re_file.write(dRe, time=t)
 
         except df.exceptions.ConvergenceError:
             # If solver fails, try again with a smaller time step
@@ -220,15 +260,6 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             coupler.U.sub(2).assign(hydro.S0)
             hydro.dt.assign(dt*timestep_reduction_fraction)
             print("Convergence not achieved.  Reducing time step to {:.1f} hours and trying again".format(hydro.dt.values()[0]*365*24))
-
-# save end states for future initialization
-# chk_file_save = results_dir + "initial_fields_russel_base_melt.h5"
-# csv_file_save = results_dir + "initial_S_russel_base_melt.csv"
-# hydro.save_end_state(chk_file_save, csv_file_save)
-
-# make matplotlib scatterplot for quick visualization (for channels only way of visualizing currently)
-# hlp.scatterplt_fields(coupler.U.subfunctions[4:], ["phi", "h", "S"], df.MixedElement(hydro.elements), mesh, results_dir, "russel")
-# hlp.scatterplt_fields(coupler.U.subfunctions[0:2], ["ubar_x", "ubar_y"], df.MixedElement(stokes.elements[0:2]), mesh, results_dir, "russel")
 
 # write parameters to table:
 hlp.save_params_to_csv(args, params_output_file, success=success)

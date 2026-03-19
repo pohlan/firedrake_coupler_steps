@@ -16,8 +16,8 @@ mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0)
 x, y = df.SpatialCoordinate(mesh)
 
 # time stepping
-dt0 = 0.5/365
-dt_max = 40/(365*24)
+dt0 = 0.01/365
+dt_max = 40/(365)
 dt_min = 1e-3/365
 timestep_increase_fraction = 1.05
 timestep_reduction_fraction = 0.5
@@ -123,7 +123,7 @@ par = {"snes_type": "newtonls",
 t     = 0
 t_end = 2
 d     = 0
-with df.CheckpointFile(f"{results_dir}time_series.h5", 'w') as afile:
+with df.CheckpointFile(f"{results_dir}time_series_hill_geom.h5", 'w') as afile:
     afile.save_mesh(mesh)
     i     = 1    # idx for checkpointing
     while (t <= t_end):
@@ -152,7 +152,7 @@ with df.CheckpointFile(f"{results_dir}time_series.h5", 'w') as afile:
             t += dt
             dt_max = get_dt(np.max(m_input.dat.data_ro))
             hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
-            if int(t*365) > d+10:
+            if int(t*365) > d+2:
                 d = int(t*365)
                 hydro.write_variables_pvd(t)
                 afile.save_function(df.project(hydro.P_w/(coupler.rho_i*coupler.g*coupler.H),coupler.Q_cg), idx=i, name="pw_pi")

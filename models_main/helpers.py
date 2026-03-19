@@ -32,6 +32,7 @@ def get_args():
     parser.add_argument('--results_directory', default='parameter_runs/')
     parser.add_argument('--sig_topo', type=int, default=0, help='smoothing parameter for bed elevation and thickness; 0: no smoothing')
     parser.add_argument('--melt_input', type=str, default='MAR', help='one of `MAR` (monthly), `KAN` (daily) or `avg` (RACMO but an average, same every year)')
+    parser.add_argument('--moulins', action='store_true', help='whether or not to route surface water through moulins; if false, use distributed melt')
     return parser.parse_args()
 
 def save_params_to_csv(args, params_output_file, success=True):
@@ -39,7 +40,7 @@ def save_params_to_csv(args, params_output_file, success=True):
                               "k_s":[args.k_s], "k_c":[args.k_c], "h_r":[args.h_r], "l_r":[args.l_r], "l_c":[args.l_c], "e_v":[args.e_v],
                               "beta2":[args.beta2], "p":[args.p], "q":[args.q],
                               "transition":[args.transition], "alpha_s":[args.alpha_s], "beta_s":[args.beta_s], "omega":[args.omega], "As_factor":[args.As_factor],
-                              "sig_topo":[args.sig_topo],"melt_input":[args.melt_input]})
+                              "sig_topo":[args.sig_topo],"melt_input":[args.melt_input], "moulins":[args.moulins]})
     if os.path.exists(params_output_file):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)
     else:
@@ -49,7 +50,7 @@ def save_params_to_csv(args, params_output_file, success=True):
 def melt_fct_KAN(hydro, S, data_dir):
     df_KAN = pd.read_csv(data_dir+'KAN_melt.csv')
     def calc_melt(day, z):
-        f_m = 0.01*400
+        f_m = 0.01*365
         lapse = -0.005
         # get day
         day_floor = int(np.floor(day))
@@ -67,7 +68,7 @@ def melt_fct_KAN(hydro, S, data_dir):
         return melt
     def calc_m(t):
         day = t*365
-        hydro.m.dat.data[:] = np.array([calc_melt(day, z) for z in S])
+        return np.array([calc_melt(day, z) for z in S])
     # first time step
     m = df.Function(hydro.V_phi)
     m.dat.data[:] = np.array([calc_melt(0.0, z) for z in S])
@@ -92,7 +93,7 @@ def melt_fct_MAR(hydro, H, meshx, meshy, coupler):
         month_ceil = int(np.ceil(month))
         floor_weight = month_ceil - month
         ceil_weight = month - month_floor
-        hydro.m.dat.data[:] = melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
+        return melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
     # first time step
     m = df.Function(hydro.V_phi)
     m.dat.data[:] = melt[:,0]
@@ -112,7 +113,7 @@ def melt_fct_avg(hydro, H):
         month_ceil = int(np.ceil(month))
         floor_weight = month_ceil - month
         ceil_weight = month - month_floor
-        hydro.m.dat.data[:] = melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
+        return melt[:,int(month_floor%12)]*floor_weight + melt[:,int(month_ceil%12)]*ceil_weight
     # first time step
     m = df.Function(hydro.V_phi)
     m.dat.data[:] = melt[:,0]

@@ -28,12 +28,16 @@ alpha_s=1.25
 beta_s=1.5
 omega=0.0005
 As_factor=2
-sig_topo=10
+sig_topo=5
 melt_input='MAR'
+moulins=true
 
 # run the model
 options="--e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha_s $alpha_s --beta_s $beta_s --omega $omega --As_factor $As_factor --sig_topo $sig_topo --melt_input $melt_input"
 if [ "$transition" = true ]; then
   options="$options --transition"
+fi
+if [ "$moulins" = true ]; then
+  options="$options --moulins"
 fi
 python -u step10b_russel_coupled.py $options

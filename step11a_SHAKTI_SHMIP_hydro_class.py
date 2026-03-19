@@ -1,28 +1,30 @@
 import firedrake as df
-from models_main.hydro_class import SHAKTI
+from models_main.coupled_model import SHAKTI, Coupler_Hydro
 import models_main.helpers as hlp
 from firedrake.checkpointing import CheckpointFile
 import numpy as np
 
 s_per_day = 3600 * 24
+s_per_year = s_per_day*365
 results_dir = 'step_11a/'
 
 # mesh
-nx, ny = 300, 35
+nx, ny = 100, 25
 Lx, Ly = 100e3, 20e3
 mesh   = df.RectangleMesh(nx, ny, Lx, Ly, originX=0.0, originY=0, diagonal="crossed")
 # mesh = df.Mesh("valley.msh")
 x, y = df.SpatialCoordinate(mesh)
 
 # shmip
-shmip_suit = "A6"
+shmip_suit = "A1"
 shmip_m = {"A1" : 7.93e-11,
            "A2" : 1.59e-9,
            "A3" : 5.79e-9,
            "A4" : 2.5e-8,
            "A5" : 4.5e-8,
            "A6" : 5.79e-7}
-m = shmip_m[shmip_suit]
+m = shmip_m[shmip_suit]*s_per_year
+# m = 0.05
 
 # geometry
 def surface(x,y):
@@ -68,28 +70,25 @@ day = 1/365
 hour = day/24
 
 # hydro object
-hydro = SHAKTI(mesh, results_dir)
-hydro.build_variables(m, dt0, surface(x,y)-bed(x,y), bed(x,y), e_v_=1e-5)
+hydro   = SHAKTI(mesh, results_dir)
+coupler = Coupler_Hydro(mesh, hydro)
 
-hlp.plot_geometry(hydro.B, hydro.H, mesh)
+B = df.Function(coupler.Q_cg).interpolate(bed(x,y))
+H = df.Function(coupler.Q_cg).interpolate(surface(x,y)-bed(x,y))
 
+coupler.set_geometry(B, H)
+hydro.set_coupler(coupler)
+hydro.build_variables()
+hydro.build_forms(m=m, dt0=dt0, e_v=0, h_r=0.1, l_r=2, u_b=1e-6*s_per_year, omega=1e-3)
+hydro.write_variables_pvd(0)
 
-# for initial state, take steady state solution from a different run
-chk_file    = results_dir + "initial_fields_A4.h5"
-with CheckpointFile(chk_file, 'r') as afile:
-    mesh_ = afile.load_mesh()
-    hydro.set_initial_h_w(afile.load_function(mesh_, "h_w"))
-    hydro.set_initial_h(afile.load_function(mesh_, "h"))
-# h0 = df.Function(hydro.V_h)
-# h0.vector()[:] = 0.01 #+0.001*np.random.randn(len(hydro.H.vector()))
-# h0.dat.data[:] = hydro.h0.dat.data_ro + 0.001*np.random.randn(len(hydro.h0.dat.data_ro))
-# hydro.set_initial_h(h0)
+coupler.nu.assign(1.787e-6)
 
 # solver options
 par = {"snes_type": "newtonls",
        "pc_factor_mat_solver_type": "mumps",
-       "snes_rtol": 1e-7,
-       "snes_atol": 1e-5,
+       "snes_rtol": 1e-3,
+       "snes_atol": 1e0,
        "snes_max_it": 200,
        "report": True,
        "snes_monitor": None,
@@ -107,7 +106,7 @@ while (t <= t_end):
         print("Minimal time step reached. Simulation failed.")
         break
     try:
-        df.solve(hydro.F == 0, hydro.U, bcs=hydro.bcs, solver_parameters=par)
+        df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=par)
         hydro.update_time_variables()
         t += dt
         hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))

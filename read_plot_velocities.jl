@@ -3,8 +3,8 @@ import GeoArrays
 
 # some plotting stuff
 Plots.scalefontsizes()     # resets font sizes
-Plots.scalefontsizes(2.7)
-wsize = (1500, 900)
+Plots.scalefontsizes(2.9)
+wsize = (1700, 1000)
 points_palette = :seaborn_colorblind6
 
 # paths
@@ -51,12 +51,16 @@ sort!(dys)
 
 n1_plot = 1
 v_plot = vs[:,p]
-xlm = (Date(2017,1,1), Date(2021,2,1))
+xlm = (Date(2016,1,1), Date(2020,12,31))
 
 for ic in axes(v_plot,1)
-    pl = Plots.plot(ylabel="Surface speed [m/yr]", leftmargin=10Plots.mm, rightmargin=25Plots.mm, bottommargin=10Plots.mm; palette=points_palette, wsize=(1200,800))
+    map_idx = Dict(1 => 0, 2 => 3, 4=>1, 3=>5)
+    gl_idx  = Dict(1 => "", 2=> "", 3=> "", 4=> "3")
+    df_pt = CSV.read("parameter_runs/run_113/113_gl$(gl_idx[ic])_$(map_idx[ic]).csv", DataFrame)
+    pl = Plots.plot(ylabel="Surface speed (m/yr)", leftmargin=10Plots.mm, rightmargin=10Plots.mm, bottommargin=10Plots.mm; palette=points_palette, wsize=(1500,800))
     plot!(dys[n1_plot:end],v_plot[ic,n1_plot:end], marker=:circle, markersize=8; lw=5, label="", markerstrokewidth=0, xlims=xlm, color=palette(points_palette)[ic])
-    vline!(Date.(2018:2021), ls=:dash, color=:black, label="", lw=1)
+    vline!(Date.(2017:2021), ls=:dash, color=:black, label="", lw=1)
+    plot!(twinx(), df_pt.time, df_pt.mm ./ (365)*100, color=:grey, xlims=xlm, fillrange=0, alpha=0.3, label="", ylabel="Melt forcing (cm/d)", tickfontsize=23, guidefontsize=24, y_foreground_color_text=:grey, y_guidefontcolor=:grey)
     savefig("point_$(ic).png")
 end
 
@@ -68,16 +72,18 @@ end
 # Plots.savefig("figures/velocities.png")
 
 # plot an individual point from csv
-ic = 4
-run_index = 65
-gl_idx  = Dict(1 => "", 2=> "", 3=> "3", 4=> "3")
+xlm = (Date(2017,1,1), Date(2020,12,31))
+ic = 2
+run_index = 124
+gl_idx  = Dict(1 => "", 2=> "", 3=> "", 4=> "3")
 map_idx = Dict(1 => 0, 2 => 3, 4=>1, 3=>5)
 df_pt = CSV.read("parameter_runs/run_$(run_index)/$(run_index)_gl$(gl_idx[ic])_$(map_idx[ic]).csv", DataFrame)
-pl = Plots.plot(ylabel="Surface speed [m/yr]", leftmargin=10Plots.mm, rightmargin=25Plots.mm, bottommargin=10Plots.mm; palette=points_palette, wsize=(1200,800), legendfontsize=15, tickfontsize=16, guidefontsize=21)
-plot!(df_pt.time, df_pt.U_model, color=:black, lw=4, label="model", ls=:dot)
-plot!(dys[n1_plot:end],v_plot[ic,n1_plot:end], marker=:circle, markersize=5; lw=4, markerstrokewidth=0, xlims=xlm, color=palette(points_palette)[ic], label="observations")
-vline!(Date.(2017:2020), ls=:dash, color=:black, label="", lw=1)
-
+df_melt = CSV.read("parameter_runs/run_113/113_gl$(gl_idx[ic])_$(map_idx[ic]).csv", DataFrame)
+pl = Plots.plot(ylabel="Surface speed (m/yr)", leftmargin=10Plots.mm, rightmargin=25Plots.mm, bottommargin=10Plots.mm; palette=points_palette, wsize=(1200,800), legendfontsize=15, tickfontsize=16, guidefontsize=21)
+plot!(pl,df_pt.time, df_pt.U_model, color=:black, lw=4, label="GlaDS with Hill transition", ls=:dot, legend=:topright, xlims=xlm)
+# plot!(pl,dys[n1_plot:end],v_plot[ic,n1_plot:end], marker=:circle, markersize=5; lw=4, markerstrokewidth=0, xlims=xlm, color=palette(points_palette)[ic], label="observations")
+vline!(pl,Date.(2018:2020), ls=:dash, color=:black, label="", lw=1)
+plot!(twinx(), df_melt.time, df_melt.mm ./ (365)*100, color=:grey, xlims=xlm, fillrange=0, alpha=0.3, label="", ylabel="Melt forcing (cm/d)", legendfontsize=15, tickfontsize=16, guidefontsize=21, y_foreground_color_text=:grey, y_guidefontcolor=:grey)
 mode = Dict(1 => "spring_speedup", 2 => "winter_speedup", 4=> "fall_min", 3=>"steep_winter")
 savefig("parameter_runs/plots/run_$(run_index)_$(mode[ic]).png")
 

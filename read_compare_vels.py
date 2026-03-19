@@ -25,9 +25,11 @@ with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as af
     n_idx = len(afile.get_timestepping_history(mesh, "phi")['index'])
     phi_model = np.zeros((len(meshx), n_idx))
     Us_model = np.zeros((len(meshx), n_idx))
+    mm        = np.zeros((len(meshx), n_idx))
     for i in range(n_idx):
         phi_model[:,i] = afile.load_function(mesh, "phi", idx=i).dat.data_ro
         Us_model[:,i]  = afile.load_function(mesh, "Us", idx=i).dat.data_ro
+        mm[:,i]  = afile.load_function(mesh, "m", idx=i).dat.data_ro
 
 # generate time vector
 start_date = datetime(2016, 1, 1)
@@ -111,23 +113,32 @@ gl = 1
 #            [-192320.0,-2530747.0]]
 # gl = 3
 
-plt.figure(figsize=(12,14))
+# coords  = [[-210017, -2.5460e6],
+#            [-203042.0,-2.545e6],
+#            [-199320.0,-2.535e6],
+#            [-192320.0,-2.54e6],
+#            [-185320.0,-2.54e6]]
+# gl = 4
+
+fig, ax = plt.subplots(4,2, figsize=(16,14))
 for (i,(xi,yi)) in enumerate(coords):
     p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
-    ax = plt.subplot(4,2,i+1)
-    plt.plot(dates_model[:-1], Us_model[p,1:], label="model")
-    plt.plot(sorted_dates[:n_months], Us_obs[p,:], label="obs")
-    plt.title(f"{i}", pad=2.0)
-    plt.ylabel("Surface speed (m/yr)")
+    i2,i1 = (i%2,int(np.floor(i/2)))
+    ax[i1,i2].plot(dates_model[:-1], Us_model[p,1:], label="model")
+    ax[i1,i2].plot(sorted_dates[:n_months], Us_obs[p,:], label="obs")
+    ax[i1,i2].set_ylabel("Surface speed (m/yr)")
+    ax[i1,i2].legend()
+    ax2 = ax[i1,i2].twinx()
+    ax2.plot(dates_model[:-1], mm[p,1:], label="melt", color="grey")
+    ax2.set_title(f"{i}", pad=2.0)
     # plt.ylim(15,225)
-    plt.legend()
 plt.savefig(f"parameter_runs/plots/run_{run_index}_gl{gl}.jpg")
 
 # save to plot in Julia
 # ic = 1
 # xi, yi = coords[ic]
 # p = np.argmin(np.sqrt((meshx-xi)**2+(meshy-yi)**2))
-# df_pt = pd.DataFrame({"time": dates_model[:-1], "U_model": Us_model[p,1:]})
+# df_pt = pd.DataFrame({"time": dates_model[:-1], "U_model": Us_model[p,1:], "mm": mm[p,1:]})
 # df_pt.to_csv(f"parameter_runs/run_{run_index}/{run_index}_gl{gl}_{ic}.csv", index=False)
 
 # plot map

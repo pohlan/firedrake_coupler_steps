@@ -2,73 +2,86 @@ import gmsh
 import numpy as np
 import fiona
 import matplotlib.pyplot as plt
+import geopandas as gpd
+
+gmsh.initialize()
+gmsh.model.add("domain")
+geometry = gmsh.model.geo
 
 data_dir = "/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/Greenland_data/russel/"
 
-# shp = fiona.open(f"{data_dir}russel_domain.gpkg", mode="r")
-shp = fiona.open(f"{data_dir}russel_domain_large.gpkg", mode="r")
-coords = np.array(list(shp.values())[0]['geometry']['coordinates']).squeeze()
-shp.close()
+gdf = gpd.read_file("Greenland_data/russel/russel_domain_less_points.gpkg")
+geom = gdf.geometry[0] #.geoms[0]
+coords_outer = geom.exterior.coords[:-1]  # last point is double, remove it
+# if there is an actual hole in the polygon
+# coords_inner = [ring.coords[:-1] for ring in geom.interiors][0]  # for several holes, remove zero and ajust accordingly in code below
 
-# plt.scatter(coords[:,0],coords[:,1])
+def build_ring(coords):
+    pts = []
+    for x, y in coords:
+        pts.append(geometry.addPoint(x, y, 0))
 
-# len_scale = 108000
-len_scale = 1
+    lines = []
+    for i in range(len(pts)-1):
+        lines.append(geometry.addLine(pts[i], pts[i+1]))
+    lines.append(geometry.addLine(pts[-1], pts[0]))
+
+    return geometry.addCurveLoop(lines), lines
+
+outer_loop, outer_lines = build_ring(coords_outer)
+# inner_loop, inner_lines = build_ring(coords_inner)
+
+# plane = geometry.addPlaneSurface([outer_loop, inner_ loop])
+plane = geometry.addPlaneSurface([outer_loop])
+
+gmsh.model.geo.synchronize()
 
 
-# Trim last point (is identical to first)
-coords = coords[:-1, :]
-xpts = coords[:,0] / len_scale
-ypts = coords[:,1] / len_scale
+xpts = [c[0] for c in coords_outer]
+ypts = [c[1] for c in coords_outer]
+# xpts = np.concatenate([ [c[0] for c in coords_outer], [c[0] for c in coords_inner]])
+# ypts = np.concatenate([ [c[1] for c in coords_outer], [c[1] for c in coords_inner]])
+# lines = np.concatenate([outer_lines, inner_lines])
+lines = np.concatenate([outer_lines])
 
-print(len(ypts))
-
-# generate mesh with gmsh
-gmsh.initialize()
-geometry = gmsh.model.geo
-
-# lc  = 1200 / len_scale
-lc  = 10000 / len_scale
-points = [geometry.add_point(xi,yi,0,lc) for (xi,yi) in zip(xpts,ypts)]
-lines  = [geometry.add_line(pt1, pt2) for (pt1,pt2) in zip(points, np.concatenate([points[1:],[points[0]]])) ]
-
-face  = geometry.add_curve_loop(lines)
-plane = geometry.add_plane_surface([face])
-
-# 'small'
-# physical_line = geometry.add_physical_group(1, np.concatenate([lines[-47:-40], lines[-28:-14],lines[10:20]]))
-# physical_line = geometry.add_physical_group(1, np.concatenate([lines[0:10], lines[20:-47],lines[-40:-28],lines[-14:]]))
-
-# large from hydrological outlet points
+# label boundary next to hydrological outlet points
+# get coordinates
 hydro_file = f"{data_dir}hydrological_outlets_russel.gpkg"
 hydro_points = fiona.open(hydro_file, mode="r")
 hydro_coords = np.array([i['geometry']['coordinates'] for i in list(hydro_points.values())])
-print(len(hydro_coords))
 hydro_points.close()
+# find closest boundary edges
 n_lines = 1  # per outlet
 i_bc_lines = np.zeros(len(hydro_coords)*n_lines, dtype=int)
 for (k,crd) in enumerate(hydro_coords):
     i_pts = np.argpartition(np.sqrt((crd[0]-xpts)**2+(crd[1]-ypts)**2), n_lines+1)[:(n_lines+1)]
     i_pts.sort(axis=0)
     i_bc_lines[k*n_lines:(k*n_lines+n_lines)] = i_pts[0:n_lines]
-physical_line = geometry.add_physical_group(1, np.array(lines)[i_bc_lines])
+# label
+physical_line = gmsh.model.addPhysicalGroup(1, np.array(lines)[i_bc_lines])
 non_bc_lines = np.delete(lines, i_bc_lines, axis=0)
-physical_line = geometry.add_physical_group(1, non_bc_lines)
+physical_line = gmsh.model.addPhysicalGroup(1, non_bc_lines)
+physical_surface = gmsh.model.addPhysicalGroup(2, [plane])
 
-physical_surface = geometry.add_physical_group(2, [plane])
 
-geometry.synchronize()
+# Set triangle sizes
+f = gmsh.model.mesh.field.add("MathEval")
+gmsh.model.mesh.field.setString(f, "F", "300 + 20000 / (1+exp(-8e-5*(x+180e3)))")
+# constant option
+# gmsh.model.mesh.field.setString(f, "F", "5000")
+gmsh.model.mesh.field.setAsBackgroundMesh(f)
+
 gmsh.model.mesh.generate(2)
-gmsh.write(f"{data_dir}russel.msh")
+gmsh.write(f"{data_dir}russel_hole.msh")
 gmsh.finalize()
 
 # plot
 import firedrake as df
 from firedrake.pyplot import tripcolor, triplot
 import matplotlib.pyplot as plt
-mesh = df.Mesh(f"{data_dir}russel.msh")
+mesh = df.Mesh(f"{data_dir}russel_hole.msh")
 fig, axes = plt.subplots()
 triplot(mesh, axes=axes)
 axes.legend()
 axes.axis("equal")
-plt.savefig(f"{data_dir}russel_mesh.jpg", dpi=300)
+plt.savefig(f"{data_dir}russel_mesh_hole.jpg", dpi=300)
