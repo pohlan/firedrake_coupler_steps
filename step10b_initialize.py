@@ -14,10 +14,9 @@ data_dir    = 'Greenland_data/'
 
 # parameters
 m          = 0.003 # constant melt input (m/yr)
-sig        = 5     # amount of smoothing for bed/thickness input (0=no smoothing)
+sig        = 10     # amount of smoothing for bed/thickness input (0=no smoothing)
 
 # mesh
-# mesh_file = data_dir+'western_med_v2.msh'
 mesh_file = data_dir+'russel/russel_hole.msh'
 mesh = df.Mesh(mesh_file)
 
@@ -86,6 +85,10 @@ hydro.set_coupler(coupler)
 hydro.build_variables()
 hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=0.5, k_c=0.2, k_s=0.002, l_c=10, l_r=10, transition=True, u_b=100, omega=0.1)
 
+#########################################
+# solve for the hydro-only steady state #
+#########################################
+
 solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_type":"newtonls",
                  "pc_factor_mat_solver_type": "mumps", # ?
@@ -121,7 +124,63 @@ while (t <= t_end):
         hydro.dt.assign(dt*timestep_reduction_fraction)
         print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
 
-# save end states for future initialization
-chk_file_save = results_dir + f"initial_fields_russel_hydro_sig{sig}.h5"
-csv_file_save = results_dir + f"initial_S_russel_hydro_sig{sig}.csv"
+# save end states for initialization of coupled run
+chk_file_hydro = results_dir + f"initial_fields_russel_hydro_sig{sig}.h5"
+csv_file_hydro = results_dir + f"initial_S_russel_hydro_sig{sig}.csv"
+hydro.save_end_state(chk_file_hydro, csv_file_hydro)
+
+######################################
+# solve for the coupled steady-state #
+######################################
+
+# initiate classes
+hydro   = GLADS(mesh, results_dir)
+stokes  = SpecFO(mesh, results_dir)
+coupler = Coupler_Flow_Hydro(mesh, stokes, hydro)
+
+# set geometries and variables
+coupler.set_geometry(B, H)
+stokes.set_coupler(coupler)
+hydro.set_coupler(coupler)
+hydro.build_variables()
+stokes.build_variables()
+stokes.build_forms(beta2=1e6, q=1.0, p=1.2, Nhat=Nhat, Uhat=Uhat)
+hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=0.5, k_c=0.2, k_s=0.002, l_c=10, l_r=10, transition=True, omega=0.1)
+
+# take initial state from hydro initialization
+with CheckpointFile(chk_file_hydro, 'r') as afile:
+    mesh_ = afile.load_mesh()
+    hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
+    hydro.set_initial_h(afile.load_function(mesh_, "h"))
+hydro.set_initial_S(np.float64(pd.read_csv(csv_file_hydro).S))
+
+# time stepping and solve
+t     = 0.0
+d     = 0    # count the days
+t_end = 20
+while (t <= t_end):
+    dt = float(hydro.dt.values()[0])
+    print(f"Time = {t} years, dt = {dt*365} days")
+    if dt < dt_min:
+        print("Minimal time step reached. Simulation failed.")
+        break
+    try:
+        df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
+        f_N.write(N.interpolate(hydro.N))
+        hydro.update_time_variables()
+        t += dt
+        hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
+        if int(t*365) >= d+10:
+            d = int(t*365)
+            hydro.write_variables_pvd(t)
+            stokes.write_variables_pvd(t)
+
+    except df.exceptions.ConvergenceError:
+        # If solver fails, try again with a smaller time step
+        hydro.dt.assign(dt*timestep_reduction_fraction)
+        print("Convergence not achieved.  Reducing time step to {0} days and trying again".format(hydro.dt.values()[0] / s_per_day))
+
+# save end states for initialization of seasonal simulations
+chk_file_save = results_dir + f"initial_fields_russel_coupled_sig{sig}.h5"
+csv_file_save = results_dir + f"initial_S_russel_coupled_sig{sig}.csv"
 hydro.save_end_state(chk_file_save, csv_file_save)
