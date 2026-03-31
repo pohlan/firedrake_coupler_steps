@@ -216,7 +216,6 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
         try:
             # interpolate spatially resolved surface runoff
             m_CG1.dat.data[:] = calc_m(t)
-            f_melt.write(m_CG1, time=t)
 
             if hydro.moulins:
                 m_DG0.interpolate(m_CG1)
@@ -225,8 +224,6 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                     M_moulins[ii] = df.assemble(m_DG0*dx_c(ii))
                 Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
                 hydro.Qm.interpolate(Qm)
-                # Qm_save.interpolate(Qm)
-                Qm_file.write(hydro.Qm, time=t)
             else:
                 hydro.m.interpolate(m_CG1)
 
@@ -244,11 +241,15 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
             if int(t*365) >= d+2:
                 d = int(t*365)
-                hydro.write_variables_pvd(t)
+                f_melt.write(m_CG1, time=t)
+                # hydro.write_variables_pvd(t)
                 stokes.write_variables_pvd(t)
                 afile.save_function(stokes.Us, idx=i, name="Us")
-                afile.save_function(stokes.Ub, idx=i, name="Ub")
+                # afile.save_function(stokes.Ub, idx=i, name="Ub")
                 afile.save_function(coupler.U.sub(0), idx=i, name="phi")
+                afile.save_function(df.project(hydro.q_s, coupler.Q_cg_vec), idx=i, name="q")
+                Q_subDG0 = hlp.save_DGT0(mesh, hydro.Q_submesh, df.project(abs(hydro.Q),hydro.V_S), hydro.Q_save, hydro.outfile_Q, t)
+                afile.save_function(Q_subDG0, idx=i, name="Q")
                 afile.save_function(coupler.U.sub(1), idx=i, name="h")
                 afile.save_function(m_CG1, idx=i, name="m")
                 i += 1

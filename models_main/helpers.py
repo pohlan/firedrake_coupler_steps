@@ -194,7 +194,7 @@ def save_DGT0(mesh, submesh, f_DGT, f_subDG0, pvd_file, time):
     for ((xi,yi),f_val) in zip(crds_DGT0,f_DGT.dat.data_ro):
         i = np.argmin(np.sqrt((xi - crds_subDG0[:,0])**2 + (yi - crds_subDG0[:,1])**2))  # due to rounding error np.where(xi==crds_subDG0[:,0] ...) doesn't work
         f_subDG0.dat.data[i] = f_val
-    pvd_file.write(f_subDG0, time=time)
+    return f_subDG0
 
 def diff_to_glads_matlab(hydro, file):
     ds_mw = xr.open_dataset(file)

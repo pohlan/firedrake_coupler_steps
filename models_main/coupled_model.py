@@ -92,9 +92,9 @@ class SpecFO(object):
         self.U_b = df.as_vector([self.u(1),self.v(1)])
         # self.tau_b = df.Function(self.coupler.Q_cg)
 
-        # self.Us = df.project(df.as_vector([self.u(0),self.v(0)]), self.Q)
+        # self.Us = df.project(df.as_vector([self.u(0),self.v(0)]), self.coupler.Q_cg_vec)
         self.Us = df.project(df.sqrt(self.u(0)**2+self.v(0)**2), self.coupler.Q_cg)
-        # self.Ub = df.project(df.as_vector([self.u(1),self.v(1)]), self.Q)
+        # self.Ub = df.project(df.as_vector([self.u(1),self.v(1)]), self.coupler.Q_cg_vec)
         self.Ub = df.project(df.sqrt(self.u(1)**2+self.v(1)**2), self.coupler.Q_cg)
 
     def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1):
@@ -202,15 +202,15 @@ class SpecFO(object):
         self.coupler.R += R_v_body
 
     def write_variables_pvd(self,t):
-        # Us_temp = df.project(df.as_vector([self.u(0),self.v(0)]), self.Q)
+        # Us_temp = df.project(df.as_vector([self.u(0),self.v(0)]), self.coupler.Q_cg_vec)
         Us_temp = df.project(df.sqrt(self.u(0)**2+self.v(0)**2), self.coupler.Q_cg)
-        # Ub_temp = df.project(df.as_vector([self.u(1),self.v(1)]), self.Q)
+        # Ub_temp = df.project(df.as_vector([self.u(1),self.v(1)]), self.coupler.Q_cg_vec)
         Ub_temp = df.project(df.sqrt(self.u(1)**2+self.v(1)**2), self.coupler.Q_cg)
 
         self.Us.dat.data[:] = Us_temp.dat.data_ro
         self.Ub.dat.data[:] = Ub_temp.dat.data_ro
         self.Us_file.write(self.Us, time=t)
-        self.Ub_file.write(self.Ub, time=t)
+        # self.Ub_file.write(self.Ub, time=t)
 
 
 class GLADS(object):
@@ -443,8 +443,10 @@ class GLADS(object):
         self.outfile_h.write(df.project(self.coupler.U.sub(1), self.V_h, name="h"), time=t)
         self.outfile_q.write(df.project(self.q_s, self.V_cg_vec, name="q"), time=t)
         self.outfile_Re.write(df.project(self.Re, self.V_h, name="Re"), time=t)
-        hlp.save_DGT0(self.mesh, self.S_submesh, self.coupler.U.sub(2), self.S_save, self.outfile_S, t)
-        hlp.save_DGT0(self.mesh, self.Q_submesh, df.project(abs(self.Q),self.V_S), self.Q_save, self.outfile_Q, t)
+        S_subDG0 = hlp.save_DGT0(self.mesh, self.S_submesh, self.coupler.U.sub(2), self.S_save, self.outfile_S, t)
+        self.outfile_S.write(S_subDG0, time=t)
+        Q_subDG0 = hlp.save_DGT0(self.mesh, self.Q_submesh, df.project(abs(self.Q),self.V_S), self.Q_save, self.outfile_Q, t)
+        self.outfile_Q.write(Q_subDG0, time=t)
         # self.outfile_Qm.write(df.project(self.M_fr, self.V_phi, name="friction"), time=t)
         if self.moulins:
             self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)
@@ -686,6 +688,7 @@ class Coupler_Flow_Hydro(object): # ice flow + hydro
 
         E_cg      = df.FiniteElement("CG",mesh.ufl_cell(),1)
         self.Q_cg = df.FunctionSpace(mesh,E_cg)
+        self.Q_cg_vec = df.VectorFunctionSpace(mesh,E_cg)
 
         self.U      = df.Function(self.V)
         self.Lambda = df.TestFunction(self.V)  # or Function??

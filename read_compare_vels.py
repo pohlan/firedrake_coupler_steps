@@ -22,13 +22,15 @@ with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as af
     X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
     meshx = X.dat.data_ro[:,0]
     meshy = X.dat.data_ro[:,1]
-    n_idx = len(afile.get_timestepping_history(mesh, "phi")['index'])
-    phi_model = np.zeros((len(meshx), n_idx))
+    n_idx = len(afile.get_timestepping_history(mesh, "Us")['index'])
+    # phi_model = np.zeros((len(meshx), n_idx))
     Us_model = np.zeros((len(meshx), n_idx))
     mm        = np.zeros((len(meshx), n_idx))
     for i in range(n_idx):
-        phi_model[:,i] = afile.load_function(mesh, "phi", idx=i).dat.data_ro
+        # phi_model[:,i] = afile.load_function(mesh, "phi", idx=i).dat.data_ro
         Us_model[:,i]  = afile.load_function(mesh, "Us", idx=i).dat.data_ro
+        # Us_vec  = afile.load_function(mesh, "Us", idx=i).dat.data_ro
+        # Us_model[:,i]  = np.sqrt(Us_vec[:,0]**2 + Us_vec[:,1]**2)
         mm[:,i]  = afile.load_function(mesh, "m", idx=i).dat.data_ro
 
 # generate time vector
@@ -89,20 +91,21 @@ for (i,f) in enumerate(sorted_files[:n_months]):
 # gl = ""
 
 # glacier #1 (furthest north)
-coords = [[-223885, -2.49326e6],
-          [-217000, -2.49416e6],
-          [-211000, -2.49506e6],
-          [-205468, -2.49596e6],
-          [-199000, -2.49676e6],
-          [-193000, -2.49760e6]]
-gl = 1
+# coords = [[-223885, -2.49326e6],
+#           [-219000, -2.49336e6],
+#           [-211000, -2.49406e6],
+#           [-205468, -2.49396e6],
+#           [-199000, -2.49446e6],
+#           [-193000, -2.49396e6]]
+# gl = 1
 
 # glacier #2
-# coords  = [[-225130, -2.50269e6],
-#           [-215304, -2.50337e6],
-#           [-203042.0,-2507072.0],
-#           [-192320.0,-2508747.0]]
-# gl = 2
+coords  = [[-223130, -2.50269e6],
+          [-215304, -2.50337e6],
+          [-208042.0, -2.50337e6],
+          [-203042.0, -2.50337e6],
+          [-197042.0, -2.50357e6]]
+gl = 2
 
 # glacier #3
 # coords  = [[-215017, -2.52269e6],
