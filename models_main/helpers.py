@@ -79,7 +79,7 @@ def melt_fct_MAR(hydro, H, meshx, meshy, coupler):
     r = gu.Raster("NETCDF:Greenland_data/MARv3.14-monthly-ERA5_1940_2023.nc:water_input_rate")
     delta = r.res[0]*2
     r.crop([min(meshx)-delta, min(meshy)-delta, max(meshx)+delta, max(meshy)+delta], inplace=True)
-    year_0  = 2016 - 1940 # starts in 1940
+    year_0  = 2018 - 1940 # starts in 1940
     n_years = 6
     b_0 = year_0*12
     b_end = b_0 + n_years*12

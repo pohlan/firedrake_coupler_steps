@@ -132,7 +132,7 @@ for (i,(xi,yi)) in enumerate(coords):
     ax[i1,i2].set_ylabel("Surface speed (m/yr)")
     ax[i1,i2].legend()
     ax2 = ax[i1,i2].twinx()
-    ax2.plot(dates_model[:-1], mm[p,1:], label="melt", color="grey")
+    ax2.fill_between(dates_model[:-1], mm[p,1:], label="melt", color="grey", alpha=0.3)
     ax2.set_title(f"{i}", pad=2.0)
     # plt.ylim(15,225)
 plt.savefig(f"parameter_runs/plots/run_{run_index}_gl{gl}.jpg")

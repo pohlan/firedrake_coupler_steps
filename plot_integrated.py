@@ -9,20 +9,24 @@ import os
 from datetime import datetime, timedelta
 import re
 
-run_index = 137
+run_index = 142
 timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 flowlines_path = "Greenland_data/russel/flowlines.gpkg"
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
 files   = os.listdir(vel_dir)
 
 # ToDo: plot also time series of..
-# - melt input
+# - Reynolds number / metric for how turbulent
 
-profile_width = 1e3
+profile_width = 3e3
 
-ds = 5e3
-gl = 5
+ds = 2.5e3
+gl = 1
 fl = [0,4,1,2,3][gl-1] # flow linestrings don't have the same numbering as gl; also gl starts at 1
+
+ss = [10e3,40e3]  # km away from terminus at which to plot the time series
+
+xstart,xend = datetime(2019,1,1),datetime(2021,1,1)
 
 # load model file meshes
 with CheckpointFile(timeseries_path, 'r') as afile:
@@ -30,21 +34,25 @@ with CheckpointFile(timeseries_path, 'r') as afile:
         x, y = df.SpatialCoordinate(mesh_)
         smesh_ = afile.load_mesh(name='firedrake_default_submesh')
         sx, sy = df.SpatialCoordinate(smesh_)
-        n_idx = len(afile.get_timestepping_history(mesh_, "phi")['index'])
+        n_idx = len(afile.get_timestepping_history(mesh_, "Us")['index'])
 
-V = df.FunctionSpace(mesh_, "CG", 1)
+# FunctionSpaces and mesh coordinates for mesh_
+# DGO
 V_DGO = df.FunctionSpace(mesh_, "DG", 0)
 meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
+# CG1
+V = df.FunctionSpace(mesh_, "CG", 1)
+meshx, meshy = zip(*hlp.get_coordinates(mesh_, "CG", 1))
+# V_vec = df.VectorFunctionSpace(mesh_, "CG", 1)
+# X = df.assemble(df.interpolate(mesh_.coordinates,V_vec))
+# meshx = X.dat.data_ro[:,0]
+# meshy = X.dat.data_ro[:,1]
 
 # load topography
 sig = 5
 r_bed = gu.Raster(f"Greenland_data/BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
 r_thk = gu.Raster(f"Greenland_data/BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
 # interpolate onto mesh
-V_vec = df.VectorFunctionSpace(mesh_, "CG", 1)
-X = df.assemble(df.interpolate(mesh_.coordinates,V_vec))
-meshx = X.dat.data_ro[:,0]
-meshy = X.dat.data_ro[:,1]
 B = df.Function(V)
 H = df.Function(V)
 S = df.Function(V)
@@ -131,17 +139,20 @@ def get_timestamp(idx=None):
             Q = afile.load_function(smesh_, "Q", idx=idx)
             Us_vec = afile.load_function(mesh_, "Us", idx=idx)
             Us = df.project(df.sqrt(df.dot(Us_vec, Us_vec)), V)
+            m = afile.load_function(mesh_, "m", idx=idx)
         else:
              q = []
              Q = []
              Us = []
+             m  = []
              for i in range(n_idx):
                   q_vec = afile.load_function(mesh_, "q", idx=i)
                   q.append(df.project(df.sqrt(df.dot(q_vec, q_vec)), V))
                   Q.append(afile.load_function(smesh_, "Q", idx=i))
                   Us_vec = afile.load_function(mesh_, "Us", idx=i)
                   Us.append(df.project(df.sqrt(df.dot(Us_vec, Us_vec)), V))
-    return q, Q, Us
+                  m.append(afile.load_function(mesh_, "m", idx=i))
+    return q, Q, Us, m
 
 def get_flux_ratio(q,Q,s0s):
     Qi = []
@@ -217,10 +228,9 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 
 
 # time series, at certain slice of flowline
-q, Q, Us = get_timestamp()
-ss = [15e3,40e3]  # km away from terminus at which to plot the time series
+q, Q, Us, m = get_timestamp()
 # dates_model = np.linspace(0,365*3,n_idx)
-start_date = datetime(2016, 1, 1)
+start_date = datetime(2018, 1, 1)
 dates_model = [start_date + timedelta(days=2*k) for k in range(n_idx)]
 
 
@@ -237,7 +247,7 @@ for splus in ss:
     for (qi,Qi) in zip(q,Q):
         Qi_time.append(get_flux_ratio(qi,Qi,[splus-ds/2,splus+ds/2])[0])
     plt.plot(dates_model, Qi_time, label=f"{splus*1e-3} km")
-# plt.xlim(1,3)
+plt.xlim(xstart,xend)
 plt.ylabel("Ratio of efficient flow")
 plt.legend()
 
@@ -262,31 +272,62 @@ plt.legend()
 
 plt.subplot(4,1,2)
 splus = ss[0]
+
+# get coordinates of points to plot
+p_DG0  = np.argmin(abs(s.dat.data_ro-splus))
+xi, yi = meshx_DG0[p_DG0], meshy_DG0[p_DG0]
+p_CG1  = np.argmin(np.sqrt((xi-meshx)**2+(yi-meshy)**2))
+xi2, yi2 = meshx[p_CG1], meshy[p_CG1]
+print([xi,yi])
+print([xi2,yi2])
+
 Umod_time = []
 Uobs_time = []
-for Umod in Us:
+m_time    = []
+# for i in range(n_idx):
+    # with CheckpointFile(timeseries_path, 'r') as afile:
+        # Umod_time.append(afile.load_function(mesh_, "Us", idx=i).dat.data_ro[p_CG1])
+for (Umod,m_) in zip(Us,m):
     Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
+    m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
 for (Uobs,mask) in zip(U_obs, U_mask):
+    # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
     Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
-plt.plot(dates_model, Umod_time-np.mean(Umod_time), label=f"model", color=colors[0], ls="dashed")
-obs_mean = np.mean(np.array(Uobs_time)[np.where(np.isfinite(Uobs_time))[0]])
+i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
+model_mean = np.array(Umod_time)[i_model].mean()
+plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[0], ls="dashed")
+i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
+obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
 plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black")
-plt.xlim(datetime(2016,1,10),datetime(2021,1,1))
 plt.ylabel("Surface speed (m/yr)")
+plt.xlim(xstart,xend)
+plt.ylim(np.array(Umod_time)[i_model].min()-1.1*model_mean, np.array(Umod_time)[i_model].max()-0.9*model_mean)
+plt.twinx()
+plt.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
 
 plt.subplot(4,1,3)
 splus = ss[1]
 Umod_time = []
 Uobs_time = []
-for Umod in Us:
+m_time    = []
+for (Umod,m_) in zip(Us,m):
     Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
+    m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
 for (Uobs,mask) in zip(U_obs, U_mask):
     Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
-plt.plot(dates_model, Umod_time-np.mean(Umod_time), label=f"model", color=colors[1], ls="dashed")
-obs_mean = np.mean(np.array(Uobs_time)[np.where(np.isfinite(Uobs_time))[0]])
+i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
+model_mean = np.array(Umod_time)[i_model].mean()
+plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[1], ls="dashed")
+i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
+obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
 plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black")
-plt.xlim(datetime(2016,1,10),datetime(2021,1,1))
 plt.ylabel("Surface speed (m/yr)")
+plt.xlim(xstart,xend)
+# plt.ylim(np.array(Umod_time)[i_model].min()-1.1*model_mean, np.array(Umod_time)[i_model].max()-0.9*model_mean)
+plt.ylim(-300,100)
+plt.twinx()
+plt.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+
 
 plt.subplot(4,1,4)
 Si = get_variable(S,s0s)
@@ -296,6 +337,6 @@ plt.plot(d_along,Bi, label="Bed", color="Black")
 plt.vlines(np.array(ss)/1e3,0,1200,ls="dashed",colors=colors)
 plt.xlabel("Distance along profile (km)")
 plt.ylabel("Elevation (m)")
-plt.legend()
+plt.legend(loc="center right")
 
 plt.savefig(f"test_profile_time_gl{gl}.jpg")
