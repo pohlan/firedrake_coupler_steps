@@ -6,32 +6,47 @@ import geoutils as gu
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import h5py
 from scipy.ndimage import gaussian_filter
 from firedrake.checkpointing import CheckpointFile
 from datetime import datetime, timedelta
 import re
 
-run_index = 114
+run_index = 129
 
-# load model files
-with CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r') as afile:
-    mesh = afile.load_mesh()
-    V = df.FunctionSpace(mesh, "CG", 1)
-    v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
-    X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
-    meshx = X.dat.data_ro[:,0]
-    meshy = X.dat.data_ro[:,1]
-    n_idx = len(afile.get_timestepping_history(mesh, "Us")['index'])
-    # phi_model = np.zeros((len(meshx), n_idx))
-    Us_model = np.zeros((len(meshx), n_idx))
-    mm        = np.zeros((len(meshx), n_idx))
-    for i in range(n_idx):
-        # phi_model[:,i] = afile.load_function(mesh, "phi", idx=i).dat.data_ro
-        Us_model[:,i]  = afile.load_function(mesh, "Us", idx=i).dat.data_ro
-        # Us_vec  = afile.load_function(mesh, "Us", idx=i).dat.data_ro
-        # Us_model[:,i]  = np.sqrt(Us_vec[:,0]**2 + Us_vec[:,1]**2)
-        mm[:,i]  = afile.load_function(mesh, "m", idx=i).dat.data_ro
+# load model files - determine n_idx first
+afile_temp = CheckpointFile(f"parameter_runs/run_{run_index}/time_series.h5", 'r')
+mesh = afile_temp.load_mesh()
+V = df.FunctionSpace(mesh, "CG", 1)
+v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
+X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
+meshx = X.dat.data_ro[:,0]
+meshy = X.dat.data_ro[:,1]
+afile_temp.close()
+
+# Use h5py directly to avoid PETSc HDF5 viewer issues
+h5_path = f"parameter_runs/run_{run_index}/time_series.h5"
+with h5py.File(h5_path, 'r') as h5file:
+    # Find Us dataset - it's stored as raw array in HDF5
+    us_dataset_path = 'topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/Us/Us'
+    if us_dataset_path in h5file:
+        us_raw = h5file[us_dataset_path][()]  # Load entire dataset
+        n_idx = us_raw.shape[0]
+    else:
+        raise ValueError(f"Could not find Us data at {us_dataset_path}")
+
+    # Load m data
+    m_dataset_path = 'topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/m/m'
+    if m_dataset_path in h5file:
+        m_raw = h5file[m_dataset_path][()]
+    else:
+        raise ValueError(f"Could not find m data at {m_dataset_path}")
+
+print(f"Found {n_idx} timesteps")
+
+# Convert raw arrays to match expected format (transpose to get (nodes, timesteps))
+Us_model = us_raw.T  # Shape should be (3184, n_idx)
+mm = m_raw.T
 
 # generate time vector
 start_date = datetime(2016, 1, 1)
@@ -80,15 +95,15 @@ for (i,f) in enumerate(sorted_files[:n_months]):
 # plot_vel(k)
 
 # original coords, mix of different glaciers
-# coords = [[-223885, -2.49326e6],
-#           [-205468, -2.49596e6],
-#           [-225130, -2.50269e6],
-#           [-216304, -2.50337e6],
-#           [-218312.472667319,-2514023.04736881],
-#           [-215217.697420904,-2510443.87251861],
-#           [-203042.0,-2507072.0],
-#           [-192320.0,-2508747.0]]
-# gl = ""
+coords = [[-223885, -2.49326e6],
+          [-205468, -2.49596e6],
+          [-225130, -2.50269e6],
+          [-216304, -2.50337e6],
+          [-218312.472667319,-2514023.04736881],
+          [-215217.697420904,-2510443.87251861],
+          [-203042.0,-2507072.0],
+          [-192320.0,-2508747.0]]
+gl = ""
 
 # glacier #1 (furthest north)
 # coords = [[-223885, -2.49326e6],
@@ -100,12 +115,12 @@ for (i,f) in enumerate(sorted_files[:n_months]):
 # gl = 1
 
 # glacier #2
-coords  = [[-223130, -2.50269e6],
-          [-215304, -2.50337e6],
-          [-208042.0, -2.50337e6],
-          [-203042.0, -2.50337e6],
-          [-197042.0, -2.50357e6]]
-gl = 2
+# coords  = [[-223130, -2.50269e6],
+#           [-215304, -2.50337e6],
+#           [-208042.0, -2.50337e6],
+#           [-203042.0, -2.50337e6],
+#           [-197042.0, -2.50357e6]]
+# gl = 2
 
 # glacier #3
 # coords  = [[-215017, -2.52269e6],

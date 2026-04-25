@@ -198,7 +198,7 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
 # time stepping and solve
 t       = 0.0
 d       = 0    # count the days
-t_end   = 3
+t_end   = 6
 success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)

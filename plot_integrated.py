@@ -10,14 +10,11 @@ from datetime import datetime, timedelta
 import re
 import h5py
 
-run_index = 132
+run_index = 126
 timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 flowlines_path = "Greenland_data/russel/flowlines.gpkg"
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
 files   = os.listdir(vel_dir)
-
-# ToDo: plot also time series of..
-# - Reynolds number / metric for how turbulent
 
 profile_width = 3e3
 
@@ -27,7 +24,7 @@ fl = [0,4,1,2,3][gl-1] # flow linestrings don't have the same numbering as gl; a
 
 ss = [10e3,30e3] #,43e3]  # km away from terminus at which to plot the time series
 
-xstart,xend = datetime(2019,1,2),datetime(2023,12,30)
+xstart,xend = datetime(2019,1,2),datetime(2022,12,30)
 
 # load model file meshes
 with CheckpointFile(timeseries_path, 'r') as afile:
@@ -224,9 +221,17 @@ def get_flux_ratio(q,Q,s0s):
         chi = slice(s, s0, s1)
         chi_s = slice(s_sub, s0, s1)
         # Integrate q over bulk domain and Q over submesh (boundary)
-        Q_flux = df.assemble(df.avg(Q)*chi_s*df.dx(domain=smesh_)) # on the submesh, dx is along traces, so 1D not 2D
-        q_flux = df.assemble(q*chi*df.dx)
+        Q_flux = df.assemble(df.avg(Q)*chi_s*df.dx(domain=smesh_)) / df.assemble(chi_s*df.dx(domain=smesh_)) # on the submesh, dx is along traces, so 1D not 2D
+        q_flux = df.assemble(q*chi*df.dx) / df.assemble(chi*df.dx)
         Qi.append(Q_flux/(Q_flux+q_flux))
+    return Qi
+
+def get_Q(Q,s0s):
+    Qi = []
+    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
+        chi_s = slice(s_sub, s0, s1)
+        Q_avg = df.assemble(Q*chi_s*df.dx(domain=smesh_)) / df.assemble(chi_s*df.dx(domain=smesh_)) # average
+        Qi.append(Q_avg)
     return Qi
 
 def get_variable(X,s0s,mask=None):
@@ -270,6 +275,51 @@ print(f"# bins along profile: {len(s0s)}")
 # set colors for longitudinal profile, color=point in time
 colors = plt.cm.twilight(np.linspace(0, 1, 5)) #[1:]
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
+
+
+def plot_vel_timeseries(s,id):
+    splus = ss[id]
+
+    # get coordinates of points to plot
+    p_DG0  = np.argmin(abs(s.dat.data_ro-splus))
+    xi, yi = meshx_DG0[p_DG0], meshy_DG0[p_DG0]
+    p_CG1  = np.argmin(np.sqrt((xi-meshx)**2+(yi-meshy)**2))
+    xi2, yi2 = meshx[p_CG1], meshy[p_CG1]
+
+    Umod_time = []
+    Uobs_time = []
+    m_time    = []
+    # for i in range(n_idx):
+        # with CheckpointFile(timeseries_path, 'r') as afile:
+            # Umod_time.append(afile.load_function(mesh_, "Us", idx=i).dat.data_ro[p_CG1])
+    for (Umod,m_) in zip(Us,m):
+        Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
+        m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
+    for (Uobs,mask) in zip(U_obs, U_mask):
+        # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
+        Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
+    model_mean = np.array(Umod_time)[i_model].mean()
+    plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[id], ls="dashed", lw=lw)
+    i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
+    obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
+    plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
+    plt.ylabel("Surface speed (m/yr)")
+    plt.xlim(xstart,xend)
+    ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+    ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+    plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
+    ax = plt.gca()
+    ax.set_xticklabels([])
+    ymin, ymax = ax.get_ylim()
+    plt.vlines([datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-20, ymax+20, color="black", ls="dotted", alpha=0.5)
+    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax2 = ax.twinx()
+    ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+    ax2.set_ylabel("Runoff (m/yr)")
+    ax2.yaxis.label.set_color("grey")
+    ax2.tick_params(axis='y', colors="grey")
 
 # plt.figure()
 # plt.subplot(2,1,1)
@@ -329,12 +379,12 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 plt.rcParams['font.size'] = 18
 lw = 2.5
 
-plt.figure(figsize=(10,15))
+plt.figure(figsize=(10,18))
 
 # Import date formatter for cleaner x-axis
 import matplotlib.dates as mdates
 
-plt.subplot(5,1,1)
+plt.subplot(6,1,1)
 for splus in ss:
     Qi_time = []
     for (qi,Qi) in zip(q,Q):
@@ -342,8 +392,7 @@ for splus in ss:
     plt.plot(dates_model, Qi_time, label=f"{splus*1e-3:.0f} km", lw=lw)
 ax = plt.gca()
 ax.set_xticklabels([])
-ymin, ymax = ax.get_ylim()
-plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], -0.5, 1.5, color="black", ls="dotted", alpha=0.5)
+plt.vlines([datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], -0.5, 1.5, color="black", ls="dotted", alpha=0.5)
 ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
 ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
@@ -352,7 +401,7 @@ plt.ylim(-0.05,1.05)
 plt.ylabel("Q / (Q+q)")
 plt.legend()
 
-plt.subplot(5,1,2)
+plt.subplot(6,1,2)
 ymin, ymax = 0, 1
 for splus in ss:
     pw_pi_time = []
@@ -363,7 +412,7 @@ for splus in ss:
     ymax = max(np.max(np.array(pw_pi_time)[i_model]),ymax)
 ax = plt.gca()
 ax.set_xticklabels([])
-plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-1, ymax+1, color="black", ls="dotted", alpha=0.5)
+plt.vlines([datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-1, ymax+1, color="black", ls="dotted", alpha=0.5)
 ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
 ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
@@ -372,144 +421,39 @@ plt.ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
 plt.ylabel("Pw / Pi")
 plt.legend()
 
-# ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
-# ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-# plt.xticks(rotation=45, ha='right')
-
-# plt.subplot(3,1,2)
-# for splus in ss:
-#     Us_time = []
-#     for Usi in Us:
-#         Us_time.append(get_variable(Usi,[splus-ds/2,splus+ds/2])[0])
-#     plt.plot(dates_model, Us_time, label=f"{splus*1e-3} km")
-# plt.ylim(50,140)
-# plt.ylabel("Surface speed (m/yr)")
-# # plt.xlim(1,3)
-
-# plt.subplot(3,1,3)
-# for splus in ss:
-#     U_time = []
-#     for (Ui,mask) in zip(U_obs,U_mask):
-#         U_time.append(get_variable(Ui,[splus-ds/2,splus+ds/2],mask=mask)[0])
-#     plt.plot(sorted_dates, U_time, label=f"{splus} km")
-# plt.xlim(datetime(2016,1,1),datetime(2021,1,1))
-# # plt.ylim(0,65e3)
-
-plt.subplot(5,1,3)
-splus = ss[0]
-
-# get coordinates of points to plot
-p_DG0  = np.argmin(abs(s.dat.data_ro-splus))
-xi, yi = meshx_DG0[p_DG0], meshy_DG0[p_DG0]
-p_CG1  = np.argmin(np.sqrt((xi-meshx)**2+(yi-meshy)**2))
-xi2, yi2 = meshx[p_CG1], meshy[p_CG1]
-
-Umod_time = []
-Uobs_time = []
-m_time    = []
-# for i in range(n_idx):
-    # with CheckpointFile(timeseries_path, 'r') as afile:
-        # Umod_time.append(afile.load_function(mesh_, "Us", idx=i).dat.data_ro[p_CG1])
-for (Umod,m_) in zip(Us,m):
-    Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
-    m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
-for (Uobs,mask) in zip(U_obs, U_mask):
-    # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
-    Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
-model_mean = np.array(Umod_time)[i_model].mean()
-plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[0], ls="dashed", lw=lw)
-i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
-obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
-plt.ylabel("Surface speed (m/yr)")
-plt.xlim(xstart,xend)
-ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
+plt.subplot(6,1,3)
+ymin, ymax = 1000,1000
+for (ic,splus) in enumerate(ss):
+    qi_time = []
+    Qi_time = []
+    for (Qi,qi) in zip(Q,q):
+        qi_time.append(get_variable(qi,[splus-ds/2,splus+ds/2])[0])
+        Qi_time.append(get_Q(Qi,[splus-ds/2,splus+ds/2])[0])
+    Re = np.array(qi_time) # np.array(qi_time)/(1.793e-6*365*24*3600)
+    plt.plot(dates_model, Re, label=f"{splus*1e-3:.0f} km", lw=lw, color=colors[ic])
+    plt.plot(dates_model, np.array(Qi_time), label=f"{splus*1e-3:.0f} km", lw=lw, ls="-.", color=colors[ic])
+    ymin = min(np.min(Re[i_model]),ymin)
+    ymax = max(np.max(Re[i_model]),ymax)
 ax = plt.gca()
 ax.set_xticklabels([])
-ymin, ymax = ax.get_ylim()
-plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-20, ymax+20, color="black", ls="dotted", alpha=0.5)
+plt.vlines([datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-200, ymax+200, color="black", ls="dotted", alpha=0.5)
+plt.fill_between([xstart,xend],700,1300, color="grey", alpha=0.2)
 ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
 ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
 ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-ax2 = ax.twinx()
-ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
-ax2.set_ylabel("Runoff (m/yr)")
-ax2.yaxis.label.set_color("grey")
-ax2.tick_params(axis='y', colors="grey")
-
-plt.subplot(5,1,4)
-splus = ss[1]
-Umod_time = []
-Uobs_time = []
-m_time    = []
-for (Umod,m_) in zip(Us,m):
-    Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
-    m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
-for (Uobs,mask) in zip(U_obs, U_mask):
-    Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
-i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
-model_mean = np.array(Umod_time)[i_model].mean()
-plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[1], ls="dashed", lw=lw)
-i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
-obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
-plt.ylabel("Surface speed (m/yr)")
 plt.xlim(xstart,xend)
-ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
-# plt.ylim(-300,100)
-ax = plt.gca()
-ymin, ymax = ax.get_ylim()
-plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-40, ymax+40, color="black", ls="dotted", alpha=0.5)
-ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
-ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-# plt.xticks(rotation=45, ha='right')
-ax2 = ax.twinx()
-ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
-ax2.set_ylabel("Runnoff (m/yr)")
-ax2.yaxis.label.set_color("grey")
-ax2.tick_params(axis='y', colors="grey")
+plt.yscale("log")
+# plt.ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
+plt.ylabel("Re")
+plt.legend()
 
-# plt.subplot(5,1,4)
-# splus = ss[2]
-# Umod_time = []
-# Uobs_time = []
-# m_time    = []
-# for (Umod,m_) in zip(Us,m):
-#     Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
-#     m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
-# for (Uobs,mask) in zip(U_obs, U_mask):
-#     Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
-# i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
-# model_mean = np.array(Umod_time)[i_model].mean()
-# plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[2], ls="dashed", lw=lw)
-# i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
-# obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-# plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
-# plt.ylabel("Surface speed (m/yr)")
-# plt.xlim(xstart,xend)
-# ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-# ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-# plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
-# # plt.ylim(-300,100)
-# ax = plt.gca()
-# ymin, ymax = ax.get_ylim()
-# plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-40, ymax+40, color="black", ls="dotted", alpha=0.5)
-# ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
-# ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
-# ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-# # plt.xticks(rotation=45, ha='right')
-# ax2 = ax.twinx()
-# ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
-# ax2.set_ylabel("Runnoff (m/yr)")
-# ax2.yaxis.label.set_color("grey")
-# ax2.tick_params(axis='y', colors="grey")
+plt.subplot(6,1,4)
+plot_vel_timeseries(s,0)
 
-plt.subplot(5,1,5)
+plt.subplot(6,1,5)
+plot_vel_timeseries(s,1)
+
+plt.subplot(6,1,6)
 Si = get_variable(S,s0s)
 Bi = get_variable(B,s0s)
 plt.plot(d_along,Si, label="Surface", color="grey", lw=lw)
