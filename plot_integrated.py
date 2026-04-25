@@ -8,8 +8,9 @@ from shapely.geometry import Point
 import os
 from datetime import datetime, timedelta
 import re
+import h5py
 
-run_index = 142
+run_index = 132
 timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 flowlines_path = "Greenland_data/russel/flowlines.gpkg"
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
@@ -21,12 +22,12 @@ files   = os.listdir(vel_dir)
 profile_width = 3e3
 
 ds = 2.5e3
-gl = 1
+gl = 5
 fl = [0,4,1,2,3][gl-1] # flow linestrings don't have the same numbering as gl; also gl starts at 1
 
-ss = [10e3,40e3]  # km away from terminus at which to plot the time series
+ss = [10e3,30e3] #,43e3]  # km away from terminus at which to plot the time series
 
-xstart,xend = datetime(2019,1,1),datetime(2021,1,1)
+xstart,xend = datetime(2019,1,2),datetime(2023,12,30)
 
 # load model file meshes
 with CheckpointFile(timeseries_path, 'r') as afile:
@@ -34,7 +35,18 @@ with CheckpointFile(timeseries_path, 'r') as afile:
         x, y = df.SpatialCoordinate(mesh_)
         smesh_ = afile.load_mesh(name='firedrake_default_submesh')
         sx, sy = df.SpatialCoordinate(smesh_)
-        n_idx = len(afile.get_timestepping_history(mesh_, "Us")['index'])
+
+# Load all raw data from HDF5 at once (avoids repeated file opens)
+with h5py.File(timeseries_path, 'r') as h5file:
+    # Load raw datasets
+    us_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/Us/Us'][()].T  # (nodes, timesteps)
+    m_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/m/m'][()].T
+    phi_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/phi/phi'][()].T
+    q_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_2/vecs/q/q'][()].T
+    Q_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/Q/Q'][()].T
+
+# Set n_idx from actual transposed data shape
+n_idx = us_raw.shape[1]
 
 # FunctionSpaces and mesh coordinates for mesh_
 # DGO
@@ -43,7 +55,7 @@ meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
 # CG1
 V = df.FunctionSpace(mesh_, "CG", 1)
 meshx, meshy = zip(*hlp.get_coordinates(mesh_, "CG", 1))
-# V_vec = df.VectorFunctionSpace(mesh_, "CG", 1)
+V_vec = df.VectorFunctionSpace(mesh_, "CG", 1)
 # X = df.assemble(df.interpolate(mesh_.coordinates,V_vec))
 # meshx = X.dat.data_ro[:,0]
 # meshy = X.dat.data_ro[:,1]
@@ -132,27 +144,79 @@ def slice(s,s0,s1):
 
 # load model files
 def get_timestamp(idx=None):
-    with CheckpointFile(timeseries_path, 'r') as afile:
-        if not idx==None:
-            q_vec = afile.load_function(mesh_, "q", idx=idx)
-            q = df.project(df.sqrt(df.dot(q_vec, q_vec)), V)
-            Q = afile.load_function(smesh_, "Q", idx=idx)
-            Us_vec = afile.load_function(mesh_, "Us", idx=idx)
-            Us = df.project(df.sqrt(df.dot(Us_vec, Us_vec)), V)
-            m = afile.load_function(mesh_, "m", idx=idx)
-        else:
-             q = []
-             Q = []
-             Us = []
-             m  = []
-             for i in range(n_idx):
-                  q_vec = afile.load_function(mesh_, "q", idx=i)
-                  q.append(df.project(df.sqrt(df.dot(q_vec, q_vec)), V))
-                  Q.append(afile.load_function(smesh_, "Q", idx=i))
-                  Us_vec = afile.load_function(mesh_, "Us", idx=i)
-                  Us.append(df.project(df.sqrt(df.dot(Us_vec, Us_vec)), V))
-                  m.append(afile.load_function(mesh_, "m", idx=i))
-    return q, Q, Us, m
+    """Convert pre-loaded raw HDF5 data to Firedrake Functions"""
+    V = df.FunctionSpace(mesh_, "CG", 1)
+    V_vec = df.VectorFunctionSpace(mesh_, "CG", 1)
+    V_sub = df.FunctionSpace(smesh_, "DG", 0)
+
+    if idx is not None:
+        # Return single timestep
+        # Us: already scalar, just reshape
+        Us = df.Function(V)
+        Us.dat.data[:] = us_raw[:, idx]
+
+        # phi and derived quantities
+        phi = df.Function(V)
+        phi.dat.data[:] = phi_raw[:, idx]
+        # N   = df.Function(V)
+        # N.interpolate(910*9.81*H-(phi-1000*9.81*B))
+        pw_pi = df.Function(V)
+        pw_pi.interpolate((phi-1000*9.81*B)/(910*9.81*H))
+
+        # q: stored as 2-component vector, compute norm
+        q_vec_raw = q_raw[:, idx::2]  # Extract 2 components for this timestep
+        q = df.Function(V)
+        q.dat.data[:] = np.sqrt(q_vec_raw[:, 0]**2 + q_vec_raw[:, 1]**2)
+
+        # Q: scalar on submesh
+        Q = df.Function(V_sub)
+        Q.dat.data[:] = Q_raw[:, idx]
+
+        # m: scalar on main mesh
+        m = df.Function(V)
+        m.dat.data[:] = m_raw[:, idx]
+
+        return q, Q, Us, m
+    else:
+        # Return all timesteps as lists
+        q_list = []
+        Q_list = []
+        Us_list = []
+        pw_pi_list = []
+        m_list = []
+
+        for i in range(n_idx):
+            # Us
+            Us = df.Function(V)
+            Us.dat.data[:] = us_raw[:, i]
+            Us_list.append(Us)
+
+            # phi and derived quantities
+            phi = df.Function(V)
+            phi.dat.data[:] = phi_raw[:, i]
+            pw_pi = df.Function(V)
+            pw_pi.interpolate((phi-1000*9.81*B)/(910*9.81*H))
+            pw_pi_list.append(pw_pi)
+
+            # q: compute norm from 2-component vector
+            q = df.Function(V)
+            # q is stored as interleaved [q_x[0], q_y[0], q_x[1], q_y[1], ...]
+            q_vec_x = q_raw[::2, i]
+            q_vec_y = q_raw[1::2, i]
+            q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2)
+            q_list.append(q)
+
+            # Q
+            Q = df.Function(V_sub)
+            Q.dat.data[:] = Q_raw[:, i]
+            Q_list.append(Q)
+
+            # m
+            m = df.Function(V)
+            m.dat.data[:] = m_raw[:, i]
+            m_list.append(m)
+
+        return q_list, Q_list, Us_list, pw_pi_list, m_list
 
 def get_flux_ratio(q,Q,s0s):
     Qi = []
@@ -228,28 +292,89 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 
 
 # time series, at certain slice of flowline
-q, Q, Us, m = get_timestamp()
+q, Q, Us, pw_pi, m = get_timestamp()
 # dates_model = np.linspace(0,365*3,n_idx)
 start_date = datetime(2018, 1, 1)
 dates_model = [start_date + timedelta(days=2*k) for k in range(n_idx)]
+i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
+
+# i_winter = np.where( (np.array(dates_model) > datetime(2019,11,1)) &  (np.array(dates_model) < datetime(2020,3,15)) )[0]
+# U_m = np.zeros((len(meshx),len(Us)))
+# for (i,uu) in enumerate(Us):
+#     U_m[:,i] = uu.dat.data_ro
+
+# grd = df.Function(V)
+# grd.interpolate(df.inner(df.grad(H),q))
+
+# dv = np.zeros(len(meshx))
+# gradH = np.zeros(len(meshx))
+# for i_spat in range(len(meshx)):
+#     tseries = U_m[i_spat,i_winter]
+#     dv[i_spat] = np.diff(tseries).mean()
+#     gradH[i_spat] = grd.dat.data[i_spat]
+
+# plt.figure()
+# i_plot = np.where(dv > -0.1)
+# plt.scatter(dv[i_plot],gradH[i_plot])
+# plt.savefig("model_winter_grad.jpg")
 
 
 # set colormap for timeseries, color=distance along profile
 # colors = plt.cm.Purples(np.linspace(0, 1, 5))[1:]
 # colors = plt.cm.tab20b.colors[12:]
-colors = ["coral","cornflowerblue"]
+colors = ["coral","cornflowerblue"] #,"greenyellow"]
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 
-plt.figure(figsize=(5,7))
-plt.subplot(4,1,1)
+# Increase font sizes
+plt.rcParams['font.size'] = 18
+lw = 2.5
+
+plt.figure(figsize=(10,15))
+
+# Import date formatter for cleaner x-axis
+import matplotlib.dates as mdates
+
+plt.subplot(5,1,1)
 for splus in ss:
     Qi_time = []
     for (qi,Qi) in zip(q,Q):
         Qi_time.append(get_flux_ratio(qi,Qi,[splus-ds/2,splus+ds/2])[0])
-    plt.plot(dates_model, Qi_time, label=f"{splus*1e-3} km")
+    plt.plot(dates_model, Qi_time, label=f"{splus*1e-3:.0f} km", lw=lw)
+ax = plt.gca()
+ax.set_xticklabels([])
+ymin, ymax = ax.get_ylim()
+plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], -0.5, 1.5, color="black", ls="dotted", alpha=0.5)
+ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
 plt.xlim(xstart,xend)
-plt.ylabel("Ratio of efficient flow")
+plt.ylim(-0.05,1.05)
+plt.ylabel("Q / (Q+q)")
 plt.legend()
+
+plt.subplot(5,1,2)
+ymin, ymax = 0, 1
+for splus in ss:
+    pw_pi_time = []
+    for pw_pi_i in pw_pi:
+        pw_pi_time.append(get_variable(pw_pi_i,[splus-ds/2,splus+ds/2])[0])
+    plt.plot(dates_model, pw_pi_time, label=f"{splus*1e-3:.0f} km", lw=lw)
+    ymin = min(np.min(np.array(pw_pi_time)[i_model]),ymin)
+    ymax = max(np.max(np.array(pw_pi_time)[i_model]),ymax)
+ax = plt.gca()
+ax.set_xticklabels([])
+plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-1, ymax+1, color="black", ls="dotted", alpha=0.5)
+ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+plt.xlim(xstart,xend)
+plt.ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
+plt.ylabel("Pw / Pi")
+plt.legend()
+
+# ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+# ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+# plt.xticks(rotation=45, ha='right')
 
 # plt.subplot(3,1,2)
 # for splus in ss:
@@ -270,7 +395,7 @@ plt.legend()
 # plt.xlim(datetime(2016,1,1),datetime(2021,1,1))
 # # plt.ylim(0,65e3)
 
-plt.subplot(4,1,2)
+plt.subplot(5,1,3)
 splus = ss[0]
 
 # get coordinates of points to plot
@@ -278,8 +403,6 @@ p_DG0  = np.argmin(abs(s.dat.data_ro-splus))
 xi, yi = meshx_DG0[p_DG0], meshy_DG0[p_DG0]
 p_CG1  = np.argmin(np.sqrt((xi-meshx)**2+(yi-meshy)**2))
 xi2, yi2 = meshx[p_CG1], meshy[p_CG1]
-print([xi,yi])
-print([xi2,yi2])
 
 Umod_time = []
 Uobs_time = []
@@ -293,19 +416,30 @@ for (Umod,m_) in zip(Us,m):
 for (Uobs,mask) in zip(U_obs, U_mask):
     # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
     Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
-i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
 model_mean = np.array(Umod_time)[i_model].mean()
-plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[0], ls="dashed")
+plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[0], ls="dashed", lw=lw)
 i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
 obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black")
+plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
 plt.ylabel("Surface speed (m/yr)")
 plt.xlim(xstart,xend)
-plt.ylim(np.array(Umod_time)[i_model].min()-1.1*model_mean, np.array(Umod_time)[i_model].max()-0.9*model_mean)
-plt.twinx()
-plt.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
+ax = plt.gca()
+ax.set_xticklabels([])
+ymin, ymax = ax.get_ylim()
+plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-20, ymax+20, color="black", ls="dotted", alpha=0.5)
+ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+ax2 = ax.twinx()
+ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+ax2.set_ylabel("Runoff (m/yr)")
+ax2.yaxis.label.set_color("grey")
+ax2.tick_params(axis='y', colors="grey")
 
-plt.subplot(4,1,3)
+plt.subplot(5,1,4)
 splus = ss[1]
 Umod_time = []
 Uobs_time = []
@@ -317,26 +451,75 @@ for (Uobs,mask) in zip(U_obs, U_mask):
     Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
 i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
 model_mean = np.array(Umod_time)[i_model].mean()
-plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[1], ls="dashed")
+plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[1], ls="dashed", lw=lw)
 i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
 obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black")
+plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
 plt.ylabel("Surface speed (m/yr)")
 plt.xlim(xstart,xend)
-# plt.ylim(np.array(Umod_time)[i_model].min()-1.1*model_mean, np.array(Umod_time)[i_model].max()-0.9*model_mean)
-plt.ylim(-300,100)
-plt.twinx()
-plt.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
+# plt.ylim(-300,100)
+ax = plt.gca()
+ymin, ymax = ax.get_ylim()
+plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-40, ymax+40, color="black", ls="dotted", alpha=0.5)
+ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+# plt.xticks(rotation=45, ha='right')
+ax2 = ax.twinx()
+ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+ax2.set_ylabel("Runnoff (m/yr)")
+ax2.yaxis.label.set_color("grey")
+ax2.tick_params(axis='y', colors="grey")
 
+# plt.subplot(5,1,4)
+# splus = ss[2]
+# Umod_time = []
+# Uobs_time = []
+# m_time    = []
+# for (Umod,m_) in zip(Us,m):
+#     Umod_time.append(get_variable(Umod,[splus-ds/2,splus+ds/2])[0])
+#     m_time.append(get_variable(m_,[splus-ds/2,splus+ds/2])[0])
+# for (Uobs,mask) in zip(U_obs, U_mask):
+#     Uobs_time.append(get_variable(Uobs,[splus-ds/2,splus+ds/2],mask=mask)[0])
+# i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
+# model_mean = np.array(Umod_time)[i_model].mean()
+# plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=colors[2], ls="dashed", lw=lw)
+# i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
+# obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
+# plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw)
+# plt.ylabel("Surface speed (m/yr)")
+# plt.xlim(xstart,xend)
+# ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+# ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+# plt.ylim(ymin-0.1*(ymax-ymin), ymax+0.1*(ymax-ymin))
+# # plt.ylim(-300,100)
+# ax = plt.gca()
+# ymin, ymax = ax.get_ylim()
+# plt.vlines([datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-40, ymax+40, color="black", ls="dotted", alpha=0.5)
+# ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+# ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+# ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+# # plt.xticks(rotation=45, ha='right')
+# ax2 = ax.twinx()
+# ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
+# ax2.set_ylabel("Runnoff (m/yr)")
+# ax2.yaxis.label.set_color("grey")
+# ax2.tick_params(axis='y', colors="grey")
 
-plt.subplot(4,1,4)
+plt.subplot(5,1,5)
 Si = get_variable(S,s0s)
 Bi = get_variable(B,s0s)
-plt.plot(d_along,Si, label="Surface", color="grey")
-plt.plot(d_along,Bi, label="Bed", color="Black")
-plt.vlines(np.array(ss)/1e3,0,1200,ls="dashed",colors=colors)
+plt.plot(d_along,Si, label="Surface", color="grey", lw=lw)
+plt.plot(d_along,Bi, label="Bed", color="Black", lw=lw)
+plt.vlines(np.array(ss)/1e3,-500,max(Si)*1.5,ls="dashed",colors=colors, lw=lw)
+plt.ylim(-max(Si)*0.05,max(Si)*1.05)
+plt.xlim(-5,60)
 plt.xlabel("Distance along profile (km)")
 plt.ylabel("Elevation (m)")
 plt.legend(loc="center right")
 
-plt.savefig(f"test_profile_time_gl{gl}.jpg")
+plt.tight_layout()
+plt.savefig(f"test_profile_time_gl{gl}_run{run_index}.jpg", dpi=150, bbox_inches='tight')
