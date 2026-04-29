@@ -8,12 +8,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-run_index = 126
+run_index = 159
 timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 flowlines_path = "Greenland_data/russel/flowlines.gpkg"
-vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
+vel_dir = "Greenland_data/velocity/monthly/"
 
-profile_width = 1e3
+profile_width = 2e3
 
 ds = 2.5e3
 # gl = 5
@@ -22,7 +22,7 @@ n_glaciers = len(glacier_ids)
 # ss = [10e3,30e3] #,43e3]  # km away from terminus at which to plot the time series
 d_upglacier = [15e3,8e3,15e3,20e3]
 
-xstart,xend = datetime(2018,1,2),datetime(2022,12,30)
+xstart,xend = datetime(2017,1,2),datetime(2021,12,30)
 
 # load model file meshes
 mesh_, smesh_ = get_meshes(timeseries_path)
@@ -68,7 +68,7 @@ for (ig,(gl,splus,color)) in enumerate(zip(glacier_ids, d_upglacier, colors)):
     q, Q, Us, pw_pi, m = get_timestamps(mesh_, smesh_, B, H, us_raw, phi_raw, q_raw, Q_raw, m_raw, n_idx)
 
     # get model time series
-    start_date = datetime(2018, 1, 1)
+    start_date = datetime(2017, 1, 1)
     dates_model = [start_date + timedelta(days=2*k) for k in range(n_idx)]
     i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
 
@@ -108,13 +108,14 @@ for (ig,(gl,splus,color)) in enumerate(zip(glacier_ids, d_upglacier, colors)):
         Qi_time.append(get_Q(Qi, smesh_, s_sub, [splus-ds/2,splus+ds/2])[0])
     qi_time = np.array(qi_time) # np.array(qi_time)/(1.793e-6*365*24*3600)  # Re
     Qi_time = np.array(Qi_time)
-    plt.plot(dates_model, Qi_time, label=f"Q (channels)", lw=lw, ls="-.", color=color)
-    plt.plot(dates_model, qi_time, label=f"q (sheets)", lw=lw, color=color)
+    s_per_yr = 3600*24*365
+    plt.plot(dates_model, Qi_time/s_per_yr, label=f"Q (channels)", lw=lw, ls="-.", color=color)
+    plt.plot(dates_model, qi_time/s_per_yr, label=f"q (sheets)", lw=lw, color=color)
     ymin = min(np.min(qi_time[i_model]),np.min(Qi_time[i_model]))
     ymax = max(np.max(qi_time[i_model]),np.max(Qi_time[i_model]))
     plt.yscale("log")
     ax = plt.gca()
-    format_ax(ax, xstart, xend, ig, ylims=(0.5,5e9), ylabel="Discharge (m^3/s)" if ig == 0 else "")
+    format_ax(ax, xstart, xend, ig, ylims=(1e-5,1e3), ylabel="Discharge (m^3/s)" if ig == 0 else "")
     # ax.set_xlabel("Date" if ig == 0 else "")
     # if ig > 0:
     #     # ax.set_yticks([])
@@ -131,7 +132,8 @@ for (ig,(gl,splus,color)) in enumerate(zip(glacier_ids, d_upglacier, colors)):
     plt.plot(d_along, Si, label="Surface", color="grey", lw=lw)
     plt.plot(d_along, Bi, label="Bed", color="Black", lw=lw)
     plt.vlines(splus/1e3,-500,max(Si)*1.5,ls="dashed",color=color, lw=lw)
-    plt.ylim(-max(Si)*0.05,max(Si)*1.05)
+    # plt.ylim(-max(Si)*0.05,max(Si)*1.05)
+    plt.ylim(-100,1300)
     plt.xlim(-5,50)
     plt.xlabel("Distance along profile (km)")
     if ig > 0:
@@ -153,3 +155,30 @@ if ax2_list:
 
 plt.tight_layout()
 plt.savefig(f"plotting/output/timeseries_run{run_index}_d{int(d_upglacier[0]/1e3)}.jpg", dpi=150, bbox_inches='tight')
+
+
+
+# for each location, plot one year timeseries just observations
+yrs = [2020,2021,2021]
+for (ig,(gl,splus,year)) in enumerate(zip(glacier_ids, d_upglacier, yrs)):
+    fl = [0,4,1,2,3][gl-1]
+    # load flowlines and compute along flowline functions s
+    s, s_sub = get_s_functions(flowlines_path, fl, mesh_, smesh_, profile_width)
+
+    plt.figure(figsize=(8,6))
+    Uobs_time = []
+    for (Uobs,mask) in zip(U_obs, U_mask):
+        Uobs_time.append(get_variable(Uobs, mesh_, s, [splus-ds/2,splus+ds/2],mask=mask)[0])
+    plt.plot(sorted_dates, Uobs_time, color="black", lw=lw, ls="dashed")
+    plt.xlim(datetime(year,1,2),datetime(year+1,1,4))
+    plt.ylabel("Observed speed (m/yr)")
+    plt.xlabel("Month of the year")
+    ax = plt.gca()
+    # ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
+    ax.spines[['right', 'top']].set_visible(False)
+    # ax.set_xticks([])
+    # ax.set_yticks([])
+    plt.savefig(f"plotting/output/gl{gl}_one_year.jpg")
+

@@ -52,8 +52,10 @@ def load_vel_obs(vel_dir, files, mesh_):
     format_string = "%d%b%y"
     date_list = []
     for f in files:
-        date_str    = re.search(date_pattern, f).group(0)
-        date_object = datetime.strptime(date_str, format_string)
+        date_str    = re.findall(date_pattern, f)
+        d0 = datetime.strptime(date_str[0], format_string)
+        d1 = datetime.strptime(date_str[1], format_string)
+        date_object = d0 + (d1-d0)/2
         date_list.append(date_object)
     pairs = zip(date_list, files)
     sorted_dates, sorted_files = zip(*sorted(pairs))

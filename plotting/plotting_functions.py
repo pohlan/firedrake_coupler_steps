@@ -108,7 +108,7 @@ def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs
     ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     ax = plt.gca()
-    format_ax(ax, xstart, xend, ig, ylims=(-61,119), ylabel="Surface speed (m/yr)")
+    format_ax(ax, xstart, xend, ig, ylims=(-90,119), ylabel="Surface speed (m/yr)")
     # melt input
     ax2 = ax.twinx()
     ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
