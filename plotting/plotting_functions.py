@@ -66,12 +66,13 @@ def format_ax(ax, xstart, xend, ig, ylims=None, ylabel="", draw_legend=True):
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
-    ax.vlines([datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
+    ax.vlines([datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
     ax.set_xlim(xstart,xend)
-    ax.set_ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
+    # ax.set_ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
+    ax.set_ylim(ymin,ymax)
     ax.set_ylabel(ylabel)
     if draw_legend:
         plt.legend()
@@ -108,7 +109,7 @@ def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs
     ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     ax = plt.gca()
-    format_ax(ax, xstart, xend, ig, ylims=(-90,119), ylabel="Surface speed (m/yr)")
+    format_ax(ax, xstart, xend, ig, ylims=(-80,105), ylabel="Speed rel. to mean (m/yr)")
     # melt input
     ax2 = ax.twinx()
     ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)

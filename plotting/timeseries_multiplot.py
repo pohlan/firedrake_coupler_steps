@@ -17,10 +17,10 @@ profile_width = 2e3
 
 ds = 2.5e3
 # gl = 5
-glacier_ids = [1,3,4]
+glacier_ids = [1,3,4,5]
 n_glaciers = len(glacier_ids)
 # ss = [10e3,30e3] #,43e3]  # km away from terminus at which to plot the time series
-d_upglacier = [15e3,8e3,15e3,20e3]
+d_upglacier = [10e3,10e3,10e3,10e3]
 
 xstart,xend = datetime(2017,1,2),datetime(2021,12,30)
 
@@ -46,7 +46,7 @@ plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 plt.rcParams['font.size'] = 18
 lw = 2.5
 
-fig = plt.figure(figsize=(len(glacier_ids)*8,15))
+fig = plt.figure(figsize=(len(glacier_ids)*6,15))
 # Create two gridspecs: one for rows 0-2 (tight), one for row 3 (with gap)
 # Each row should have equal height; gap between row 3 and 4 is 0.05
 # Row height = (0.95 - 0.05 - 0.05) / 4 = 0.2125
@@ -68,7 +68,7 @@ for (ig,(gl,splus,color)) in enumerate(zip(glacier_ids, d_upglacier, colors)):
     q, Q, Us, pw_pi, m = get_timestamps(mesh_, smesh_, B, H, us_raw, phi_raw, q_raw, Q_raw, m_raw, n_idx)
 
     # get model time series
-    start_date = datetime(2017, 1, 1)
+    start_date = datetime(2016, 1, 1)
     dates_model = [start_date + timedelta(days=2*k) for k in range(n_idx)]
     i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
 
@@ -115,7 +115,7 @@ for (ig,(gl,splus,color)) in enumerate(zip(glacier_ids, d_upglacier, colors)):
     ymax = max(np.max(qi_time[i_model]),np.max(Qi_time[i_model]))
     plt.yscale("log")
     ax = plt.gca()
-    format_ax(ax, xstart, xend, ig, ylims=(1e-5,1e3), ylabel="Discharge (m^3/s)" if ig == 0 else "")
+    format_ax(ax, xstart, xend, ig, ylims=(1e-5,1e2), ylabel="Discharge (m^3/s)" if ig == 0 else "")
     # ax.set_xlabel("Date" if ig == 0 else "")
     # if ig > 0:
     #     # ax.set_yticks([])
@@ -153,24 +153,27 @@ if ax2_list:
     for ax in ax2_list:
         ax.set_ylim(global_ymin, global_ymax)
 
-plt.tight_layout()
+plt.tight_layout(pad=0.4)
 plt.savefig(f"plotting/output/timeseries_run{run_index}_d{int(d_upglacier[0]/1e3)}.jpg", dpi=150, bbox_inches='tight')
 
 
 
 # for each location, plot one year timeseries just observations
-yrs = [2020,2021,2021]
-for (ig,(gl,splus,year)) in enumerate(zip(glacier_ids, d_upglacier, yrs)):
+plt.rcParams['font.size'] = 23
+yrs = [2021,2019,2022,2019]
+ymins = [30,160,100,80]
+for (ig,(gl,splus,year,ymin)) in enumerate(zip(glacier_ids, d_upglacier, yrs, ymins)):
     fl = [0,4,1,2,3][gl-1]
     # load flowlines and compute along flowline functions s
     s, s_sub = get_s_functions(flowlines_path, fl, mesh_, smesh_, profile_width)
 
-    plt.figure(figsize=(8,6))
+    plt.figure(figsize=(6,6))
     Uobs_time = []
     for (Uobs,mask) in zip(U_obs, U_mask):
         Uobs_time.append(get_variable(Uobs, mesh_, s, [splus-ds/2,splus+ds/2],mask=mask)[0])
-    plt.plot(sorted_dates, Uobs_time, color="black", lw=lw, ls="dashed")
-    plt.xlim(datetime(year,1,2),datetime(year+1,1,4))
+    plt.plot(sorted_dates, Uobs_time, color="black", lw=lw, ls="dashed", marker="o", markersize=7)
+    plt.xlim(datetime(year-1,11,2),datetime(year+1,2,4))
+    plt.ylim(ymin,ymin+145)
     plt.ylabel("Observed speed (m/yr)")
     plt.xlabel("Month of the year")
     ax = plt.gca()
@@ -180,5 +183,5 @@ for (ig,(gl,splus,year)) in enumerate(zip(glacier_ids, d_upglacier, yrs)):
     ax.spines[['right', 'top']].set_visible(False)
     # ax.set_xticks([])
     # ax.set_yticks([])
+    plt.tight_layout(pad=0.4)
     plt.savefig(f"plotting/output/gl{gl}_one_year.jpg")
-

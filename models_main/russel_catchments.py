@@ -39,7 +39,7 @@ def get_catchments_russel(mesh):
     mesh_pts.to_crs(catchments.crs, inplace=True)
 
     # get model domain
-    model_domain = gpd.read_file("Greenland_data/russel/russel_domain_less_points.gpkg")
+    model_domain = gpd.read_file("Greenland_data/russel/russel_domain.gpkg")
     model_domain.to_crs(catchments.crs, inplace=True)
     model_domain = model_domain.geometry[0]
 

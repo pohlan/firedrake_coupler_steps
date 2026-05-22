@@ -10,7 +10,7 @@ geometry = gmsh.model.geo
 
 data_dir = "/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/Greenland_data/russel/"
 
-gdf = gpd.read_file("Greenland_data/russel/russel_domain_less_points.gpkg")
+gdf = gpd.read_file("Greenland_data/russel/russel_domain.gpkg")
 geom = gdf.geometry[0] #.geoms[0]
 coords_outer = geom.exterior.coords[:-1]  # last point is double, remove it
 # if there is an actual hole in the polygon
@@ -72,16 +72,16 @@ gmsh.model.mesh.field.setString(f, "F", "300 + 20000 / (1+exp(-8e-5*(x+180e3)))"
 gmsh.model.mesh.field.setAsBackgroundMesh(f)
 
 gmsh.model.mesh.generate(2)
-gmsh.write(f"{data_dir}russel_hole.msh")
+gmsh.write(f"{data_dir}russel.msh")
 gmsh.finalize()
 
 # plot
 import firedrake as df
 from firedrake.pyplot import tripcolor, triplot
 import matplotlib.pyplot as plt
-mesh = df.Mesh(f"{data_dir}russel_hole.msh")
+mesh = df.Mesh(f"{data_dir}russel.msh")
 fig, axes = plt.subplots()
 triplot(mesh, axes=axes)
 axes.legend()
 axes.axis("equal")
-plt.savefig(f"{data_dir}russel_mesh_hole.jpg", dpi=300)
+plt.savefig(f"{data_dir}russel_mesh.jpg", dpi=300)

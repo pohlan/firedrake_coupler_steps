@@ -23,7 +23,7 @@ results_dir = args.results_directory+"/run_{}/".format(args.run_index)
 params_output_file = args.results_directory+"parameter_runs.csv"
 
 # mesh
-mesh_file = data_dir+'russel/russel_hole.msh'
+mesh_file = data_dir+'russel/russel.msh'
 mesh = df.Mesh(mesh_file)
 # x, y = df.SpatialCoordinate(mesh)
 
@@ -116,7 +116,7 @@ f_melt = df.VTKFile(results_dir+"m0_per_year.pvd")
 if args.melt_input == "KAN":
     m, calc_m = hlp.melt_fct_KAN(hydro, S, data_dir)
 elif args.melt_input == "MAR":
-    m, calc_m = hlp.melt_fct_MAR(hydro, H, meshx, meshy, coupler)
+    m, calc_m = hlp.melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler)
 elif args.melt_input == "avg":
     m, calc_m = hlp.melt_fct_avg(hydro, H)
 
@@ -175,8 +175,6 @@ x, y = df.SpatialCoordinate(mesh)
 # hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
 # hydro.set_initial_phi(0.0)
 # hydro.set_initial_S(0.1)
-# chk_file = f"step_10b/results/initial_fields_russel_base_melt_sig{sig}.h5"
-# csv_file = f"step_10b/results/initial_S_russel_base_melt_sig{sig}.csv"
 chk_file = f"step_10b/results/initial_fields_russel_coupled_sig{sig}.h5"
 csv_file = f"step_10b/results/initial_S_russel_coupled_sig{sig}.csv"
 with CheckpointFile(chk_file, 'r') as afile:
@@ -198,7 +196,7 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
 # time stepping and solve
 t       = 0.0
 d       = 0    # count the days
-t_end   = 6
+t_end   = 8
 success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)
