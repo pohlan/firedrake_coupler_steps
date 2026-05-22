@@ -6,9 +6,11 @@ import scipy.interpolate as itp
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import re
 import argparse
 import pandas as pd
 import geoutils as gu
+import rasterio.transform as rt
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -87,6 +89,68 @@ def melt_fct_MAR(hydro, H, meshx, meshy, coupler):
     melt = np.zeros((len(H.dat.data[:]), len(i_months)))  # will interpolate onto same mesh as H
     for (n,i) in enumerate(i_months):
           melt[:,n] = r.interp_points((meshx, meshy), band=i, as_array=True) / coupler.rho_w * 12
+    def calc_m(t):
+        month = t*12
+        month_floor = int(np.floor(month))
+        month_ceil = int(np.ceil(month))
+        floor_weight = month_ceil - month
+        ceil_weight = month - month_floor
+        return melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
+    # first time step
+    m = df.Function(hydro.V_phi)
+    m.dat.data[:] = melt[:,0]
+    return m, calc_m
+
+def get_MAR_Raster_with_transform(file):
+    ds = xr.open_dataset(
+        file,
+        decode_times=False
+    )
+    da = ds.RU.sortby("y", ascending=False)  # ensures north-up
+    x = da.x.values
+    y = da.y.values
+
+    dx = x[1] - x[0]
+    dy = abs(y[1] - y[0])   # will typically be positive after sortby
+    # transform, isn't correct when just using gu.Raster(..)
+    transform = rt.from_origin(
+        x.min() - dx / 2,
+        y.max() + dy / 2,
+        dx,
+        dy
+    )
+    arr = da.values  # shape: (time, y, x)
+    r = gu.Raster.from_array(
+        arr,
+        transform=transform,
+        crs="EPSG:3413"
+    )
+    return r
+
+def melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler):
+    print("Interpolating MAR melt rates, taking a while..")
+    melt_dir = "Greenland_data/forcing/MAR/"
+    files   = os.listdir(melt_dir)
+    # extract year from filename and sort in chronological order
+    yr_pattern = r'\d{4}'
+    format_string = "%Y"
+    yrs_list = []
+    for f in files:
+        date_str = re.findall(yr_pattern, f)
+        # d = datetime.strptime(date_str[0], format_string)
+        yrs_list.append(int(date_str[0]))
+
+    pairs = zip(yrs_list, files)
+    sorted_years, sorted_files = zip(*sorted(pairs))
+    # load data
+    n_months = len(files)*12
+    melt = np.zeros((len(H.dat.data[:]), n_months))
+    for (i_file,f) in enumerate(sorted_files):
+        r = get_MAR_Raster_with_transform(melt_dir+f)
+        r.crop([-2.4e5, -2.585e6, 0.0, -2.47e6], inplace=True)
+        for m_of_year in range(12):
+            n = i_file*12 + m_of_year
+            melt[:,n] = r.interp_points((meshx, meshy), band=m_of_year, as_array=True) / coupler.rho_w * 12
     def calc_m(t):
         month = t*12
         month_floor = int(np.floor(month))

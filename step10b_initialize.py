@@ -17,7 +17,7 @@ m          = 0.003 # constant melt input (m/yr)
 sig        = 10     # amount of smoothing for bed/thickness input (0=no smoothing)
 
 # mesh
-mesh_file = data_dir+'russel/russel_hole.msh'
+mesh_file = data_dir+'russel/russel.msh'
 mesh = df.Mesh(mesh_file)
 
 # time stepping
@@ -83,7 +83,9 @@ coupler.set_geometry(B, H)
 hlp.plot_geometry(coupler.B, coupler.H, mesh)
 hydro.set_coupler(coupler)
 hydro.build_variables()
-hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=0.5, k_c=0.2, k_s=0.002, l_c=10, l_r=10, transition=True, u_b=100, omega=0.1)
+# hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=0.5, k_c=0.2, k_s=0.002, l_c=10, l_r=10, transition=True, u_b=100, omega=0.1)
+# hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=1.0, k_c=0.1, k_s=1e-4, l_c=10, l_r=5, transition=True, alpha_s=1.5, u_b=100, omega=0.001, As_factor=5)  # 161
+hydro.build_forms(m=m, dt0=dt0, e_v=1e-5, h_r=0.6, k_c=0.5, k_s=1e-2, l_c=10, l_r=5, transition=False, alpha_s=1.25, u_b=100, omega=0.001, As_factor=2)  # 191
 
 #########################################
 # solve for the hydro-only steady state #
@@ -144,8 +146,9 @@ stokes.set_coupler(coupler)
 hydro.set_coupler(coupler)
 hydro.build_variables()
 stokes.build_variables()
-stokes.build_forms(beta2=1e6, q=1.0, p=1.2, Nhat=Nhat, Uhat=Uhat)
-hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=0.5, k_c=0.2, k_s=0.002, l_c=10, l_r=10, transition=True, omega=0.1)
+stokes.build_forms(beta2=2.5e5, q=1.0, p=1.0, Nhat=Nhat, Uhat=Uhat)
+# hydro.build_forms(m=m, dt0=dt0, e_v=1e-4, h_r=1.0, k_c=0.1, k_s=1e-4, l_c=10, l_r=5, transition=True, alpha_s=1.5, omega=0.001, As_factor=5)  # 161
+hydro.build_forms(m=m, dt0=dt0, e_v=1e-5, h_r=0.6, k_c=0.5, k_s=1e-2, l_c=10, l_r=5, transition=False, alpha_s=1.25, u_b=100, omega=0.001, As_factor=2)  # 191
 
 # take initial state from hydro initialization
 with CheckpointFile(chk_file_hydro, 'r') as afile:
