@@ -6,7 +6,7 @@ target_directory='parameter_runs/'
 # determine the number of already started runs by counting the number of directories, than add 1 to get new run_index
 num_directories=$(find "$target_directory" -maxdepth 1 -mindepth 1 -type d -name "run_*" | wc -l)
 # run_index=$((num_directories+1))
-run_index=124
+run_index=161
 
 # make a new directory and copy this file so that the input parameters are recorded at the start of the simulation
 new_dir=$target_directory'run_'$run_index/
@@ -16,18 +16,18 @@ cp step10b_input.sh $new_dir'input_run'$run_index'.sh'
 # parameters
 e_v=0.0001
 l_r=5
-h_r=1.2
-k_s=0.01
-k_c=0.5
+h_r=1.0
+k_s=0.0001
+k_c=0.1
 l_c=10
-beta2=5e5
+beta2=3.3e5
 p=1.2
-q=0.5
+q=1.0
 transition=true
 alpha_s=1.5
 beta_s=1.5
 omega=0.001
-As_factor=2
+As_factor=5
 sig_topo=5
 melt_input='MAR'
 moulins=false

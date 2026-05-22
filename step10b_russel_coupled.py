@@ -5,12 +5,9 @@ from firedrake.checkpointing import CheckpointFile
 from models_main.coupled_model import GLADS, SpecFO, Coupler_Flow_Hydro
 import models_main.helpers as hlp
 from models_main.russel_catchments import get_catchments_russel
+from models_main.initialize import initialize
 import numpy as np
 import pandas as pd
-# import fiona
-
-# import rasterio as rio
-# from scipy.ndimage import gaussian_filter
 import geoutils as gu
 
 s_per_hour = 3600
@@ -25,28 +22,6 @@ params_output_file = args.results_directory+"parameter_runs.csv"
 # mesh
 mesh_file = data_dir+'russel/russel.msh'
 mesh = df.Mesh(mesh_file)
-# x, y = df.SpatialCoordinate(mesh)
-
-# when using DB's mesh
-# set subdomain id to 1 where hydro dirichlet bcs should be applied applied
-# hydro_file = f"{data_dir}russel/hydrological_outlets_russel_db.gpkg"
-# hydro_points = fiona.open(hydro_file, mode="r")
-# hydro_coords = np.array([i['geometry']['coordinates'] for i in list(hydro_points.values())])
-# hydro_points.close()
-
-# Vdiv           = df.FunctionSpace(mesh, "HDiv Trace", 0)   # trace elements
-# v_div = df.VectorFunctionSpace(mesh, "HDiv Trace", 0)
-# X_div = df.assemble(interpolate(mesh.coordinates,v_div))
-# meshx_div = X_div.dat.data_ro[:,0]
-# meshy_div = X_div.dat.data_ro[:,1]
-# exterior_nodes = Vdiv.boundary_nodes('on_boundary')
-# edgefunc       = df.Function(Vdiv)                         # function that will hold 1 where bc should be applied, 0 elsewhere
-# n_lines = 1
-# for (k,crd) in enumerate(hydro_coords):
-#     i_pts = np.argpartition(np.sqrt((crd[0]-meshx_div[exterior_nodes])**2+(crd[1]-meshy_div[exterior_nodes])**2), n_lines+1)[:(n_lines+1)]
-#     i_pts.sort(axis=0)
-#     edgefunc.dat.data[exterior_nodes[i_pts[0:n_lines]]] = 1
-# mesh     = df.RelabeledMesh(mesh, [edgefunc], [1])
 
 # time stepping
 dt_max = 20/365
@@ -170,13 +145,8 @@ if hydro.moulins:
     # Qm_save = df.Function(hydro.V_phi)
     Qm_file = df.VTKFile(results_dir+"moulin_dirac.pvd")
 
-x, y = df.SpatialCoordinate(mesh)
-# hydro.set_initial_phi(0.0)
-# hydro.set_initial_S(1*(10-(x+2.3e5)/3e5))
-# hydro.set_initial_phi(0.0)
-# hydro.set_initial_S(0.1)
-chk_file = f"step_10b/results/initial_fields_russel_coupled_sig{sig}.h5"
-csv_file = f"step_10b/results/initial_S_russel_coupled_sig{sig}.csv"
+# initialize (run into steady state)
+chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args)
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -189,8 +159,8 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_rtol": 1e-3,
                  "snes_atol": 1e0,
                  "snes_max_it": 50,
-                 "report": True,
-                 "snes_monitor": None,
+                 "report": False,
+                #  "snes_monitor": None,
                  "error_on_nonconvergence": True}
 
 # time stepping and solve
