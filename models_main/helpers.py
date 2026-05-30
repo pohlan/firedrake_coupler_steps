@@ -34,6 +34,7 @@ def get_args():
     parser.add_argument('--results_directory', default='parameter_runs/')
     parser.add_argument('--sig_topo', type=int, default=0, help='smoothing parameter for bed elevation and thickness; 0: no smoothing')
     parser.add_argument('--melt_input', type=str, default='MAR', help='one of `MAR` (monthly), `KAN` (daily) or `avg` (RACMO but an average, same every year)')
+    parser.add_argument('--m_basal', type=float, default=0, help='Basal melt rate additional to melt_input (but without frictional heating)')
     parser.add_argument('--moulins', action='store_true', help='whether or not to route surface water through moulins; if false, use distributed melt')
     return parser.parse_args()
 
@@ -42,12 +43,51 @@ def save_params_to_csv(args, params_output_file, success=True):
                               "k_s":[args.k_s], "k_c":[args.k_c], "h_r":[args.h_r], "l_r":[args.l_r], "l_c":[args.l_c], "e_v":[args.e_v],
                               "beta2":[args.beta2], "p":[args.p], "q":[args.q],
                               "transition":[args.transition], "alpha_s":[args.alpha_s], "beta_s":[args.beta_s], "omega":[args.omega], "As_factor":[args.As_factor],
-                              "sig_topo":[args.sig_topo],"melt_input":[args.melt_input], "moulins":[args.moulins]})
+                              "sig_topo":[args.sig_topo],"melt_input":[args.melt_input], "m_basal":[args.m_basal], "moulins":[args.moulins]})
     if os.path.exists(params_output_file):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)
     else:
         df_params.to_csv(params_output_file, index=False)
 
+def get_topography(mesh, args):
+    # function spaces
+    V = df.FunctionSpace(mesh, "CG", 1)
+    v_dg = df.VectorFunctionSpace(mesh, "CG", 1)
+    X = df.assemble(df.interpolate(mesh.coordinates,v_dg))
+    meshx = X.dat.data_ro[:,0]
+    meshy = X.dat.data_ro[:,1]
+    B = df.Function(V)
+    H = df.Function(V)
+
+    # load bed and thickness data, either original BedMachine or smoothed
+    sig = args.sig_topo
+    data_dir    = args.data_directory
+    if sig==0:
+        r_bed = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:bed")
+        r_thk = gu.Raster(f"NETCDF:{data_dir}BedMachineGreenland-v5.nc:thickness")
+    else:  # higher sigma == more smoothing
+        r_bed = gu.Raster(f"{data_dir}BedMachineGreenland-v5_bed_smooth_sig{sig}.nc")
+        r_thk = gu.Raster(f"{data_dir}BedMachineGreenland-v5_thickness_smooth_sig{sig}.nc")
+
+    # interpolate onto mesh
+    B.dat.data[:] = r_bed.interp_points((meshx, meshy), as_array=True)
+    H.dat.data[:] = r_thk.interp_points((meshx, meshy), as_array=True)
+    S = B.dat.data[:] + H.dat.data[:] # surface elevation
+
+    # set minimum ice thickness to 10
+    thklim = 0
+    thklim = 10
+    Htemp = H.dat.data[:]
+    Htemp[Htemp<thklim] = thklim
+    H.dat.data[:] = Htemp
+
+    # make bed elevation and thickness the same at bc points of individual outlets
+    bc_nodes = V.boundary_nodes(1)
+    for i in range(0,len(bc_nodes),2):
+        nodes = bc_nodes[i:i+2]
+        B.dat.data[nodes] = np.mean(B.dat.data_ro[nodes])
+        H.dat.data[nodes] = np.mean(H.dat.data_ro[nodes])
+    return B, H
 
 def melt_fct_KAN(hydro, S, data_dir):
     df_KAN = pd.read_csv(data_dir+'KAN_melt.csv')

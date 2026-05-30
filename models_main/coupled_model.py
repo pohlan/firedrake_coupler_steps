@@ -61,7 +61,10 @@ class SpecFO(object):
     def build_variables(self):
         n = self.coupler.n
 
-        i_u0 = len(self.coupler.hydro.elements)
+        if hasattr(self.coupler, 'hydro'):
+            i_u0 = len(self.coupler.hydro.elements)
+        else:
+            i_u0 = 0
 
         self.ubar = self.coupler.U[i_u0]
         self.vbar = self.coupler.U[i_u0+1]
@@ -97,21 +100,22 @@ class SpecFO(object):
         # self.Ub = df.project(df.as_vector([self.u(1),self.v(1)]), self.coupler.Q_cg_vec)
         self.Ub = df.project(df.sqrt(self.u(1)**2+self.v(1)**2), self.coupler.Q_cg)
 
-    def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1):
-        n          = self.coupler.n
-        g          = self.coupler.g
-        rho_i      = self.coupler.rho_i
+    def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1, N_frac=None, N=None):
+        n          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.n)
+        g          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.g)
+        rho_i      = df.Function(self.coupler.Q_cg).interpolate(self.coupler.rho_i)
         # scale ice flow constant to get velocities in m/a not m/s
         s_per_year = 3600*24*365
-        Be         = (self.coupler.A*s_per_year)**(-1/n) # Pa^(-n) a^(-1)
-        # A          = self.coupler.A*s_per_year
-        Uhat = self.Uhat = df.Constant(Uhat)
-        Nhat = self.Nhat = df.Constant(Nhat)
+        Be         = df.Function(self.coupler.Q_cg).interpolate((self.coupler.A*s_per_year)**(-1/n)) # Pa^(-n) a^(-1)
+        A          = self.coupler.A*s_per_year
+        Uhat = self.Uhat = df.Function(self.coupler.Q_cg).interpolate(Uhat)
+        Nhat = self.Nhat = df.Function(self.coupler.Q_cg).interpolate(Nhat)
         # ice flow specific constants
-        eps_reg    = df.Constant(eps_reg)
-        p = self.p = df.Constant(p)
-        q = self.q = df.Constant(q)
-        beta2 = self.beta2 = df.Constant(beta2)
+        eps_reg    = df.Function(self.coupler.Q_cg).interpolate(eps_reg)
+        p = self.p = df.Function(self.coupler.Q_cg).interpolate(p)
+        q = self.q = df.Function(self.coupler.Q_cg).interpolate(q)
+        # beta2 = self.beta2 = df.Constant(beta2)
+        beta2 = self.beta2 = df.Function(self.coupler.Q_cg).interpolate(beta2)
 
         u = self.u
         v = self.v
@@ -120,8 +124,12 @@ class SpecFO(object):
         H = self.coupler.H
         B = self.coupler.B
         S = self.coupler.S
-        N = self.coupler.hydro.N
-        # N = 0.5*rho_i*g*H
+        if hasattr(self.coupler, 'hydro'):
+            N = self.coupler.hydro.N
+        elif N_frac is not None:
+            N = N_frac*rho_i*g*H
+        else:
+            N = df.Function(self.coupler.Q_cg).interpolate(N)
 
         def dsdx(s):
             return 1./H*(S.dx(0) - s*H.dx(0))
@@ -185,15 +193,38 @@ class SpecFO(object):
         # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
 
         # Coulomb, Hewitt 2013 / Schoof 2005
-        # mu_b = df.Constant(0.5)
-        # lambda_b = df.Constant(1.0)
-        # eps_u = df.Constant(1e-2)
-        # eps_N = df.Constant(1e4)
-        # u_b = self.u_b = df.sqrt(self.u0(1)**2 + self.v0(1)**2 + eps_u**2) # note, this is the velocity from the previous time step, necessary to keep the Jacobian reasonable..
-        # N_eff = df.sqrt(self.coupler.hydro.N0**2 + eps_N**2)
-        # f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b)+eps_u)**(1/n)
-        # tau_bx = f * u(1)/(u_b+eps_u)
-        # tau_by = f * v(1)/(u_b+eps_u)
+        #### mu_b = df.Constant(0.1)
+        #### lambda_b = df.Constant(1.0)
+        #### eps_u = df.Constant(1e-8)
+        #### eps_N = df.Constant(1e4)
+        #### u_b = self.u_b = df.sqrt(u(1)**2 + v(1)**2 + eps_u)
+        #### N_eff = df.sqrt(self.coupler.hydro.N**2 + eps_N**2)
+        #### f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b)+eps_u)**(1/n)
+        #### tau_bx = f * u(1)/(u_b+eps_u)
+        #### tau_by = f * v(1)/(u_b+eps_u)
+
+        # Gagliardini with alpha=1 and q=1
+        # As = df.Constant(1.66e-24)
+        # C  = df.Constant(0.16)
+        #### Xsi    = u_b / (C**n*Max(N,1e5)**n*As)
+        #### f      = As**(-1/n) * (1/(1+Xsi))**(1/n)
+        #### tau_bx = -f * (u_b+1e-5)**(1/n-1) * u(1)
+        #### tau_by = -f * (u_b+1e-5)**(1/n-1) * v(1)
+
+        # u_b_1n_1 = abs((u(1)**2 + v(1)**2) + eps_u)**((1/n-1)/2.)
+        ## f = C*Max(N,1e4)*u_b**(1/n-1) / (u_b+C**n*As*Max(N,1e4)**n)**1/n
+        # f = C*Max(N,1e4)*u_b_1n_1 / (u_b+C**n*As*Max(N,1e4)**n)**1/n
+        # tau_bx = self.tau_bx = -f*u(1)
+        # tau_by = -f*v(1)
+        # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
+
+
+
+        # w_R_u = self.w_R_u = df.Constant(1.0)
+        # w_R_v = self.w_R_v = df.Constant(1.0)
+
+        # self.R_u_body_print = w_R_u * R_u_body
+        # self.R_v_body_print = w_R_v * R_v_body
 
         R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3)
         R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3)
@@ -210,7 +241,7 @@ class SpecFO(object):
         self.Us.dat.data[:] = Us_temp.dat.data_ro
         self.Ub.dat.data[:] = Ub_temp.dat.data_ro
         self.Us_file.write(self.Us, time=t)
-        # self.Ub_file.write(self.Ub, time=t)
+        self.Ub_file.write(self.Ub, time=t)
 
 
 class GLADS(object):
@@ -239,6 +270,7 @@ class GLADS(object):
         self.outfile_Re  = df.VTKFile(results_dir+'df_Re.pvd')
         self.outfile_S   = df.VTKFile(results_dir+'df_S.pvd')
         self.outfile_Q   = df.VTKFile(results_dir+'df_Q.pvd')
+        self.outfile_M_fr= df.VTKFile(results_dir+'df_M_fr.pvd')
 
         # DG0 submesh function for saving channels (direct writing of DGT0 to pvd not supported at this point)
         self.S_save, self.S_submesh = hlp.make_subDG0(mesh)
@@ -393,9 +425,10 @@ class GLADS(object):
             Uhat  = self.coupler.stokes.Uhat
             Nhat  = self.coupler.stokes.Nhat
             tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
-            M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+            # M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
         else:                                # prescribed if hydro only
             u_b = df.Constant(u_b)
+            # M_fr = self.M_fr = df.Constant(0)
 
         # log-normal bump size
         # sigma_hr = 1
@@ -412,12 +445,36 @@ class GLADS(object):
         C_c = A_c*S*abs(N)**(n-1)*Max(N,0)
 
         # weak form residuals
-        R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
-        R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS(degree=3)
-        R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
-        R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS(degree=3) + S*w*df.ds(degree=3) # last term is to enforse S = 0 at boundary edges
+        R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
+        R_phi_S = self.R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS(degree=3)
+        R_h     = self.R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
+        R_S     = self.R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS(degree=3) + S*w*df.ds(degree=3) # last term is to enforse S = 0 at boundary edges
         # add them all up
         self.coupler.R  += R_phi_h + R_phi_S + R_h + R_S
+
+        # w_phi = self.w_phi = df.Constant(1/1e8)
+        # w_h   = self.w_h   = df.Constant(1/1e4)
+        # w_S   = self.w_S   = df.Constant(1/1e2)
+        # self.R_phi_h_print = w_phi * R_phi_h
+        # self.R_phi_S_print = w_phi * R_phi_S
+        # self.R_h_print = w_h   * R_h
+        # self.R_S_print = w_S   * R_S
+        # self.coupler.R  += w_phi * (R_phi_h + R_phi_S) + w_h * R_h + w_S * R_S
+
+        # for scale analysis
+        # self.T_storage = xsi*e_v/(rho_w*g)*(phi - phi0)/dt * df.dx(degree=3)
+        # self.T_flux    = -df.dot(df.grad(xsi), q_s) * df.dx(degree=3)
+        # self.T_source  = xsi*(O - C - m - M_fr) * df.dx(degree=3)
+        # self.h_time    = ((h-h0)/dt)*psi*df.dx(degree=3)
+        # self.h_O       = (-O)*psi*df.dx(degree=3)
+        # self.h_C       = C*psi*df.dx(degree=3)
+        # self.S_time    = df.avg(((S-S0)/dt)*w) * df.dS(degree=3)
+        # self.S_O       = df.avg(- O_c*w) * df.dS(degree=3)
+        # self.S_C       = df.avg(C_c*w) * df.dS(degree=3)
+        # self.S_bc      = S*w*df.ds(degree=3)
+
+        # self.dh_print  = df.project(h - h0, self.V_h)
+        # self.dS_print  = df.project(S - S0, self.V_S)
 
         # add moulin term if applicable
         if moulins:
@@ -447,7 +504,8 @@ class GLADS(object):
         self.outfile_S.write(S_subDG0, time=t)
         Q_subDG0 = hlp.save_DGT0(self.mesh, self.Q_submesh, df.project(abs(self.Q),self.V_S), self.Q_save, self.outfile_Q, t)
         self.outfile_Q.write(Q_subDG0, time=t)
-        # self.outfile_Qm.write(df.project(self.M_fr, self.V_phi, name="friction"), time=t)
+        # self.outfile_M_fr.write(df.project(self.M_fr, self.V_phi, name="frictional_heat"), time=t)
+        # self.outfile_M_fr.write(df.project(self.coupler.stokes.tau_b, self.V_phi, name="tau_bx"), time=t)
         if self.moulins:
             self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)
 
@@ -735,4 +793,34 @@ class Coupler_Hydro(object):  # hydro only
     def set_geometry(self,B,H):
         self.B = df.Function(self.hydro.V_phi).project(B)
         self.H = df.Function(self.hydro.V_phi).project(H)
+        self.S = self.B + self.H
+
+class Coupler_Flow(object):  # hydro only
+    def __init__(self,mesh,stokes):
+
+        # physical constants used in both models
+        self.n     = df.Constant(3)           # -              -- flow exponent
+        self.A     = df.Constant(3.375e-24)   # Pa^(-n) s^(-1) -- flow constant
+        self.g     = df.Constant(9.81)        # m / s^2        -- gravitational acceleration
+        self.rho_i = df.Constant(910)         # kg / m^3       -- density of ice
+
+        self.stokes = stokes
+
+        elements = self.stokes.elements
+
+        self.E_V      = df.MixedElement(elements)
+        self.V   = df.FunctionSpace(mesh,self.E_V)
+
+        E_cg      = df.FiniteElement("CG",mesh.ufl_cell(),1)
+        self.Q_cg = df.FunctionSpace(mesh,E_cg)
+        self.Q_cg_vec = df.VectorFunctionSpace(mesh,E_cg)
+
+        self.U      = df.Function(self.V)
+        self.Lambda = df.TestFunction(self.V)  # or Function??
+
+        self.R = 0
+
+    def set_geometry(self,B,H):
+        self.B = df.Function(self.Q_cg).project(B)
+        self.H = df.Function(self.Q_cg).project(H)
         self.S = self.B + self.H
