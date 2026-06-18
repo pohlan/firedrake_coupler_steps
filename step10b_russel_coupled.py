@@ -73,7 +73,7 @@ for i in range(0,len(bc_nodes),2):
 f_B = df.VTKFile(results_dir+"B.pvd").write(B)
 f_H = df.VTKFile(results_dir+"H.pvd").write(H)
 
-# initiate classes with updated mesh
+# initiate classes
 hydro   = GLADS(mesh, results_dir)
 stokes  = SpecFO(mesh, results_dir)
 coupler = Coupler_Flow_Hydro(mesh, stokes, hydro)
@@ -126,7 +126,17 @@ hydro.build_variables()
 stokes.build_variables()
 # dt0=get_dt(max(melt[:,0]))
 dt0= 2*hour
-stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
+
+# get beta2 from inversion
+# chk_file = "test_inversion/beta2_opt_1e-3.h5"
+chk_file = "test_inversion/beta2_opt_1e-3_run187.h5"
+with CheckpointFile(chk_file, 'r') as afile:
+        mesh_ = afile.load_mesh()
+        beta2 = afile.load_function(mesh_, name="beta2")
+df.VTKFile(results_dir+"beta2.pvd").write(beta2)
+
+stokes.build_forms(beta2=beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
+# stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
 hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
 # initial melt input to moulins
@@ -146,7 +156,8 @@ if hydro.moulins:
     Qm_file = df.VTKFile(results_dir+"moulin_dirac.pvd")
 
 # initialize (run into steady state)
-chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args)
+chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, beta2, results_dir)
+# chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, args.beta2, results_dir)
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -157,7 +168,7 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
                  "snes_type":"newtonls",
                  "pc_factor_mat_solver_type": "mumps", # ?
                  "snes_rtol": 1e-3,
-                 "snes_atol": 1e0,
+                 "snes_atol": 1e-3,
                  "snes_max_it": 50,
                  "report": False,
                 #  "snes_monitor": None,
@@ -166,7 +177,7 @@ solver_params = {#"snes_linesearch_type": "l2",#newton
 # time stepping and solve
 t       = 0.0
 d       = 0    # count the days
-t_end   = 8
+t_end   = args.t_end
 success = True
 with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
     afile.save_mesh(mesh)
@@ -183,7 +194,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             break
         try:
             # interpolate spatially resolved surface runoff
-            m_CG1.dat.data[:] = calc_m(t)
+            m_CG1.dat.data[:] = calc_m(t) + args.m_basal
 
             if hydro.moulins:
                 m_DG0.interpolate(m_CG1)
@@ -200,6 +211,31 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             # kmax = df.Constant(1e-2*s_per_day*365)
             # hydro.k_s.interpolate((kmax-kmin)/25 * hydro.m + kmin)
 
+            # for w, form in zip([hydro.w_phi, hydro.w_h, hydro.w_S, stokes.w_R_u, stokes.w_R_v], [hydro.R_phi_h, hydro.R_h, hydro.R_S, stokes.R_u_body, stokes.R_v_body]):
+            #     # print(1/df.assemble(form).dat.norm)
+            #     w.assign(1/df.assemble(form).dat.norm)
+
+            # terms = {
+            #         # "phi_storage": hydro.T_storage,
+            #         # "phi_flux": hydro.T_flux,
+            #         # "phi_source": hydro.T_source,
+            #         # "h_time": hydro.h_time,
+            #         # "h_O": hydro.h_O,
+            #         # "h_C": hydro.h_C,
+            #         # "S_time": hydro.S_time,
+            #         # "S_O": hydro.S_O,
+            #         # "S_C": hydro.S_C,
+            #         # "S_boundary": hydro.S_bc,
+            #         "R_phi_h": hydro.R_phi_h_print,
+            #         "R_phi_S": hydro.R_phi_S_print,
+            #         "R_h": hydro.R_h_print,
+            #         "R_S": hydro.R_S_print,
+            #         "R_u_body": stokes.R_u_body_print,
+            #         "R_v_body": stokes.R_v_body_print
+            #         }
+            # for name, form in terms.items():
+            #     print(f"{name:15s}: {df.assemble(form).dat.norm:.3e}")
+
             df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
             hydro.update_time_variables()
             # stokes.u0 = stokes.u
@@ -211,7 +247,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 d = int(t*365)
                 f_melt.write(m_CG1, time=t)
                 # hydro.write_variables_pvd(t)
-                stokes.write_variables_pvd(t)
+                # stokes.write_variables_pvd(t)
                 afile.save_function(stokes.Us, idx=i, name="Us")
                 # afile.save_function(stokes.Ub, idx=i, name="Ub")
                 afile.save_function(coupler.U.sub(0), idx=i, name="phi")
@@ -219,7 +255,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 Q_subDG0 = hlp.save_DGT0(mesh, hydro.Q_submesh, df.project(abs(hydro.Q),hydro.V_S), hydro.Q_save, hydro.outfile_Q, t)
                 afile.save_function(Q_subDG0, idx=i, name="Q")
                 afile.save_function(coupler.U.sub(1), idx=i, name="h")
-                afile.save_function(m_CG1, idx=i, name="m")
+                # afile.save_function(m_CG1, idx=i, name="m")
+                # afile.save_function(df.project(hydro.N, coupler.Q_cg), idx=i, name="N")
                 i += 1
 
         except df.exceptions.ConvergenceError:
@@ -232,3 +269,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
 
 # write parameters to table:
 hlp.save_params_to_csv(args, params_output_file, success=success)
+
+# chk_file = results_dir+"winter_state.h5"
+# csv_file = results_dir+"winter_state.csv"
+# hydro.save_end_state(chk_file, csv_file)

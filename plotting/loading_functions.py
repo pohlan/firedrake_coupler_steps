@@ -46,7 +46,7 @@ def load_topography(mesh_, sig=5):
     return B, H, S
 
 # load velocity observations
-def load_vel_obs(vel_dir, files, mesh_):
+def load_vel_obs(vel_dir, files, mesh_, element="DG", order=0, xrange=(datetime(2018,1,2),datetime(2021,12,30))):
     # extract datetime object from filenames and sort after date
     date_pattern = r'\d{2}[A-Z][a-z]{2}\d{2}'
     format_string = "%d%b%y"
@@ -59,13 +59,18 @@ def load_vel_obs(vel_dir, files, mesh_):
         date_list.append(date_object)
     pairs = zip(date_list, files)
     sorted_dates, sorted_files = zip(*sorted(pairs))
+    sorted_dates, sorted_files = np.array(sorted_dates), np.array(sorted_files)
+    i_in_range = np.where((sorted_dates>xrange[0]) & (sorted_dates<xrange[-1]))
+    sorted_dates = sorted_dates[i_in_range]
+    sorted_files = sorted_files[i_in_range]
     # get function space
-    V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
-    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
+    V_DG0 = df.FunctionSpace(mesh_, element, order)
+    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, element, order))
     # read files in order
-    n_months = len(files)
+    n_months = len(sorted_files)
     U_obs = []
     U_mask = []
+    rasters = []
     for (i,f) in enumerate(sorted_files[:n_months]):
         r = gu.Raster(f"{vel_dir}{f}")
         delta = r.res[0]*2
@@ -80,9 +85,10 @@ def load_vel_obs(vel_dir, files, mesh_):
         mask.dat.data[i_finite] = 1
         U_obs.append(U)
         U_mask.append(mask)
+        rasters.append(r)
         # # save for visual check
         # df.VTKFile("s_obs.pvd").write(U_obs[0])
-    return sorted_dates, U_obs, U_mask
+    return sorted_dates, U_obs, U_mask, rasters
 
 # load flowlines
 def segment_lengths(line):

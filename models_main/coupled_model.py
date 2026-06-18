@@ -188,8 +188,8 @@ class SpecFO(object):
         vi = VerticalIntegrator(points,weights)
 
         # Budd sliding law
-        tau_bx = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
-        tau_by = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
+        tau_bx = -beta2*(Min(Max(N,1e4),rho_i*g*H)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
+        tau_by = -beta2*(Min(Max(N,1e4),rho_i*g*H)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
         # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
 
         # Coulomb, Hewitt 2013 / Schoof 2005
@@ -301,31 +301,31 @@ class GLADS(object):
     def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha_s=1.25, beta_s=1.5, As_factor=2, transition=False, omega=1/2000, u_b=30, Am=10, moulins=False):
         s_per_year = df.Constant(60**2*24*365)
         # physical constants
-        rho_i = self.coupler.rho_i
-        rho_w = self.coupler.rho_w
-        g     = self.coupler.g
-        n     = self.coupler.n
-        A_s   = df.Constant(self.coupler.A*s_per_year * As_factor / n**n)
-        A_c   = df.Constant(self.coupler.A*s_per_year * 2 / n**n)
-        L     = self.coupler.L
-        ct    = self.coupler.ct
-        cw    = self.coupler.cw
-        nu    = df.Constant(self.coupler.nu)
+        rho_i = df.Function(self.V_phi).interpolate(self.coupler.rho_i)
+        rho_w = df.Function(self.V_phi).interpolate(self.coupler.rho_w)
+        g     = df.Function(self.V_phi).interpolate(self.coupler.g)
+        n     = df.Function(self.V_phi).interpolate(self.coupler.n)
+        A_s   = df.Function(self.V_phi).interpolate(self.coupler.A*s_per_year * As_factor / n**n)
+        A_c   = df.Function(self.V_phi).interpolate(self.coupler.A*s_per_year * 2 / n**n)
+        L     = df.Function(self.V_phi).interpolate(self.coupler.L)
+        ct    = df.Function(self.V_phi).interpolate(self.coupler.ct)
+        cw    = df.Function(self.V_phi).interpolate(self.coupler.cw)
+        nu    = df.Function(self.V_phi).interpolate(self.coupler.nu)
 
         # parameters
-        k_s   = df.Constant(k_s)       # m^(7/4) kg^(-1/2) -- sheet conductivity
+        k_s     = df.Function(self.V_phi).interpolate(k_s)       # m^(7/4) kg^(-1/2) -- sheet conductivity
         # k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s*s_per_year)
-        k_c   = df.Constant(k_c)       # m^(3/2) kg^(-1/2) -- channel conductivity
-        alpha_s = df.Constant(alpha_s)       # -             -- flux exponent
-        alpha_c = df.Constant(1.25)
-        beta_s  = df.Constant(beta_s)        # -                 -- flux exponent
-        beta_c  = df.Constant(1.5)
-        h_r   = df.Constant(h_r)         # m                 -- bedrock bump height
-        l_r   = df.Constant(l_r)         # m                 -- bedrock bump length
-        l_c   = df.Constant(l_c)         # m
-        e_v   = df.Constant(e_v)         # -                 -- englacial storage ratio
-        Am    = df.Constant(Am)          # m^2               -- moulin cross-sectional area
-        omega = df.Constant(omega)
+        k_c     = df.Function(self.V_phi).interpolate(k_c)       # m^(3/2) kg^(-1/2) -- channel conductivity
+        alpha_s = df.Function(self.V_phi).interpolate(alpha_s)       # -             -- flux exponent
+        alpha_c = df.Function(self.V_phi).interpolate(1.25)
+        beta_s  = df.Function(self.V_phi).interpolate(beta_s)        # -                 -- flux exponent
+        beta_c  = df.Function(self.V_phi).interpolate(1.5)
+        h_r     = df.Function(self.V_phi).interpolate(h_r)         # m                 -- bedrock bump height
+        l_r     = df.Function(self.V_phi).interpolate(l_r)         # m                 -- bedrock bump length
+        l_c     = df.Function(self.V_phi).interpolate(l_c)         # m
+        e_v     = df.Function(self.V_phi).interpolate(e_v)         # -                 -- englacial storage ratio
+        Am      = df.Function(self.V_phi).interpolate(Am)          # m^2               -- moulin cross-sectional area
+        omega   = df.Function(self.V_phi).interpolate(omega)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
@@ -352,9 +352,9 @@ class GLADS(object):
         phi0 = self.phi0 = df.Function(self.V_phi)
         phi0.interpolate(0.8*rho_i * g * H + rho_w * g * B)
         h0   = self.h0   = df.Function(self.V_h)
-        h0.dat.data[:]   = 0.1*h_r
+        h0.interpolate(0.1*h_r)
         S0   = self.S0   = df.Function(self.V_S)
-        S0.dat.data[:]   = 0.001
+        S0.interpolate(0.001)
 
         # make first guess equal to initial state (see Burgers tutorial on firedrake documentation)
         self.coupler.U.sub(0).assign(phi0)

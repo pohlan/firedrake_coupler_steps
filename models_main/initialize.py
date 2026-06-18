@@ -8,10 +8,6 @@ import numpy as np
 import pandas as pd
 
 s_per_day = 3600 * 24
-results_dir = 'models_main/initial_states/'
-
-# constant melt input (m/yr)
-m          = 0.003
 
 # time stepping
 dt0 = 0.05/365
@@ -20,7 +16,7 @@ dt_min = 1e-3/365
 timestep_increase_fraction = 1.05
 timestep_reduction_fraction = 0.5
 
-def initialize(mesh, H, B, Uhat, Nhat, args):
+def initialize(mesh, H, B, Uhat, Nhat, args, beta2, results_dir):
 
     # initiate classes
     hydro   = GLADS(mesh, results_dir)
@@ -31,7 +27,7 @@ def initialize(mesh, H, B, Uhat, Nhat, args):
     hlp.plot_geometry(coupler.B, coupler.H, mesh)
     hydro.set_coupler(coupler)
     hydro.build_variables()
-    hydro.build_forms(u_b=100, m=m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
+    hydro.build_forms(u_b=100, m=args.m_basal, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
     solver_params = {#"snes_linesearch_type": "l2",#newton
                      "snes_type":"newtonls",
@@ -95,8 +91,8 @@ def initialize(mesh, H, B, Uhat, Nhat, args):
     hydro.set_coupler(coupler)
     hydro.build_variables()
     stokes.build_variables()
-    stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
-    hydro.build_forms(m=m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
+    stokes.build_forms(beta2=beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
+    hydro.build_forms(m=args.m_basal, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
     # take steady-state from hydro run as initialization
     with CheckpointFile(chk_file_hydro, 'r') as afile:

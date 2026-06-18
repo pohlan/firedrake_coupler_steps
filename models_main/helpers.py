@@ -16,6 +16,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-options_left', type=int, default=0, help='turn off annoying message')
     parser.add_argument('--run_index',dest='run_index', type=int,default=99999)
+    parser.add_argument('--t_end', type=float, default=5, help='how many years of simulation')
     parser.add_argument('--k_s', type=float, default=0.05, help='sheet conductivity')
     parser.add_argument('--k_c', type=float, default=0.5, help='channel conductivity')
     parser.add_argument('--h_r', type=float, default=0.5, help='bump height')
@@ -32,7 +33,7 @@ def get_args():
     parser.add_argument('--q', type=float, default=1, help='sliding exponent')
     parser.add_argument('--data_directory', default='Greenland_data/')
     parser.add_argument('--results_directory', default='parameter_runs/')
-    parser.add_argument('--sig_topo', type=int, default=0, help='smoothing parameter for bed elevation and thickness; 0: no smoothing')
+    parser.add_argument('--sig_topo', type=int, default=5, help='smoothing parameter for bed elevation and thickness; 0: no smoothing')
     parser.add_argument('--melt_input', type=str, default='MAR', help='one of `MAR` (monthly), `KAN` (daily) or `avg` (RACMO but an average, same every year)')
     parser.add_argument('--m_basal', type=float, default=0, help='Basal melt rate additional to melt_input (but without frictional heating)')
     parser.add_argument('--moulins', action='store_true', help='whether or not to route surface water through moulins; if false, use distributed melt')
@@ -48,6 +49,38 @@ def save_params_to_csv(args, params_output_file, success=True):
         df_params.to_csv(params_output_file, mode="a", header=False, index=False)
     else:
         df_params.to_csv(params_output_file, index=False)
+
+def get_params_from_input_file(run_index):
+    input_file = f"parameter_runs/run_{run_index}/input_run{run_index}.sh"
+
+    float_params = {}
+    with open(input_file) as f:
+        for line in f:
+            line = line.strip()
+
+            # skip comments and empty lines
+            if not line or line.startswith("#"):
+                continue
+
+            m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)=(.+)$", line)
+            if not m:
+                continue
+
+            key, value = m.groups()
+
+            # remove surrounding quotes if present
+            value = value.strip().strip("'").strip('"')
+
+            # skip booleans
+            if value in ("true", "false"):
+                continue
+
+            try:
+                float_params[key] = float(value)
+            except ValueError:
+                # skip strings and other non-numeric values
+                pass
+        return float_params
 
 def get_topography(mesh, args):
     # function spaces

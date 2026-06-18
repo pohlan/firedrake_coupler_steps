@@ -27,6 +27,14 @@ def get_Q(Q, smesh_, s_sub, s0s):
         Qi.append(Q_avg)
     return Qi
 
+def get_q(q, mesh_, s, s0s):
+    qi = []
+    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
+        chi = slice(s, s0, s1)
+        q_avg = df.assemble(df.avg(q*chi)*df.dS) / df.assemble(df.avg(chi)*df.dS) # average
+        qi.append(q_avg)
+    return qi
+
 def get_variable(X, mesh_, s, s0s, mask=None):
     # get function space
     V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
@@ -60,26 +68,36 @@ def idx_to_month(idx, dt=2):
     elif dec == 0.7:
         return "Sep"
 
-def format_ax(ax, xstart, xend, ig, ylims=None, ylabel="", draw_legend=True):
+def idx_to_letter(i):
+    return chr(ord('a') + i)
+
+def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_legend=False):
     if not (ylims is None):
         ymin, ymax = ylims
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
     ax.vlines([datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
-    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1,7]))
-    ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=1))
+    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1]))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=7))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax.tick_params(axis='x', length=0, width=2)  # no ticks
+    # ax.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
     ax.set_xlim(xstart,xend)
     # ax.set_ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
     ax.set_ylim(ymin,ymax)
     ax.set_ylabel(ylabel)
     if draw_legend:
-        plt.legend()
+        ax.legend()
     if ig > 0:
         ax.tick_params(axis='y', labelleft=False, length=7, width=2)
+    else:
+        ax.tick_params(axis='y', length=7, width=2)
+    # panel annotation
+    panel_label = idx_to_letter(panel_idx)
+    ax.annotate(panel_label, xy=(0.03,0.9), xycoords="axes fraction", fontsize=18, fontweight="bold")
 
-def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs, U_mask, xstart, xend, i_model, color, lw, ds, ig, n_glaciers):
+def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs, U_mask, xstart, xend, i_model, color, lw, ds, ig, n_glaciers, model_label, ax1):
     # get function space coordinates
     meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
     meshx, meshy = zip(*hlp.get_coordinates(mesh_, "CG", 1))
@@ -89,8 +107,19 @@ def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs
     p_CG1  = np.argmin(np.sqrt((xi-meshx)**2+(yi-meshy)**2))
     xi2, yi2 = meshx[p_CG1], meshy[p_CG1]
 
+    # observations, plot only if the ax is empty still to avoid re-doing it several times
+    if len(ax1.lines) == 0:
+        Uobs_time = []
+        for (Uobs,mask) in zip(U_obs, U_mask):
+            # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
+            Uobs_time.append(get_variable(Uobs, mesh_, s, [splus-ds/2,splus+ds/2],mask=mask)[0])
+        i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
+        obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
+        # plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw, ls="dashed")
+        ax1.plot(sorted_dates, Uobs_time, label=f"Observations", color="black", lw=lw, ls="dashed", marker="o", markersize=5)
+
+    # model
     Umod_time = []
-    Uobs_time = []
     m_time    = []
     # for i in range(n_idx):
         # with CheckpointFile(timeseries_path, 'r') as afile:
@@ -98,24 +127,23 @@ def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs
     for (Umod,m_) in zip(Us,m):
         Umod_time.append(get_variable(Umod, mesh_, s, [splus-ds/2,splus+ds/2])[0])
         m_time.append(get_variable(m_, mesh_, s, [splus-ds/2,splus+ds/2])[0])
-    for (Uobs,mask) in zip(U_obs, U_mask):
-        # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
-        Uobs_time.append(get_variable(Uobs, mesh_, s, [splus-ds/2,splus+ds/2],mask=mask)[0])
     model_mean = np.array(Umod_time)[i_model].mean()
-    plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=color, ls="solid", lw=lw)
-    i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
-    obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-    plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw, ls="dashed")
-    ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    ax = plt.gca()
-    format_ax(ax, xstart, xend, ig, ylims=(-80,105), ylabel="Speed rel. to mean (m/yr)")
-    # melt input
-    ax2 = ax.twinx()
-    ax2.fill_between(dates_model, m_time, label="melt", color="grey", alpha=0.3)
-    ax2.tick_params(axis='y', labelright=False, colors="grey", length=7, width=2)
-    if (ig==n_glaciers-1):
-        ax2.set_ylabel("Runoff (m/yr)")
-        ax2.yaxis.label.set_color("grey")
-        ax2.tick_params(axis='y', labelright=True, colors="grey", length=7, width=2)
-    return ax2
+    # plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=color, ls="solid", lw=lw)
+    ax1.plot(dates_model[1:], Umod_time[1:], label=model_label, color=color, ls="solid", lw=lw)
+
+    # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+    # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
+    # format_ax(ax, xstart, xend, ig, ylims=(-80,105), ylabel="Speed rel. to mean (m/yr)")
+    format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
+
+    # melt input, also only plot once the first time
+    if len(ax1.lines) == 2:
+        ax2 = ax1.twinx()
+        ax2.fill_between(dates_model, m_time, color="grey", alpha=0.3)
+        ax2.tick_params(axis='y', labelright=False, colors="grey", length=7, width=2)
+        if (ig==n_glaciers-1):
+            ax2.set_ylabel(r"Runoff ($\mathrm{m^3\,a^{-1}}$)")
+            ax2.yaxis.label.set_color("grey")
+            ax2.tick_params(axis='y', labelright=True, colors="grey", length=7, width=2)
+
+    return
