@@ -5,15 +5,14 @@ target_directory='parameter_runs/'
 
 run_index=201
 
-for k_s_i in {0.0001,0.0005}  # {0.0001,0.0005,0.001,0.005,0.01}
+for k_s_i in {0.0001,0.0005}  #{0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01}
 do
-  for m_basal_i in {0.003,0.01,0.02}
+  for m_basal_i in {0.003,0.01,0.02,0.03,0.04}
   do
     echo "k_s = $k_s_i, m_basal=$m_basal_i, run_index=$run_index"
-    # make a new directory and copy this file so that the input parameters are recorded at the start of the simulation
+    # make a new directory
     new_dir=$target_directory'run_'$run_index/
     mkdir -p $new_dir
-    cp step10b_input.sh $new_dir'input_run'$run_index'.sh'
 
     # parameters
     e_v=0.0001
@@ -35,6 +34,30 @@ do
     m_basal=$m_basal_i
     moulins=false
     t_end=2.5
+
+    # record parameters in a txt file
+    cat > "$new_dir/parameters.txt" <<EOF
+run_index=$run_index
+e_v=$e_v
+l_r=$l_r
+h_r=$h_r
+k_s=$k_s
+k_c=$k_c
+l_c=$l_c
+beta2=$beta2
+p=$p
+q=$q
+transition=$transition
+alpha_s=$alpha_s
+beta_s=$beta_s
+omega=$omega
+As_factor=$As_factor
+sig_topo=$sig_topo
+melt_input=$melt_input
+m_basal=$m_basal
+moulins=$moulins
+t_end=$t_end
+EOF
 
     # run the model
     options="--t_end $t_end --e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha_s $alpha_s --beta_s $beta_s --omega $omega --As_factor $As_factor --sig_topo $sig_topo --m_basal $m_basal --melt_input $melt_input"

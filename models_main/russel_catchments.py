@@ -17,7 +17,7 @@ def get_catchments_russel(mesh):
     S.dat.data[:] = r_surf.interp_points((mesh_xs.dat.data_ro, mesh_ys.dat.data_ro), as_array=True)
 
     catchments = gpd.read_file("Greenland_data/Yang_Smith_2016/ds01/catchments_LC80070132013231LGN00_B8.shp").geometry
-    additional_catchments = gpd.read_file("Greenland_data/Yang_Smith_2016/additional_catchments.gpkg").geometry  # manually outlined, where there were moulins/rivers but no catchment
+    # additional_catchments = gpd.read_file("Greenland_data/Yang_Smith_2016/additional_catchments.gpkg").geometry  # manually outlined, where there were moulins/rivers but no catchment
     moulins_gdf = gpd.read_file("Greenland_data/Yang_Smith_2016/ds01/moulins_LC80070132013231LGN00_B8.shp").geometry
     moulins = moulins_gdf.geometry
     lakes = gpd.read_file("Greenland_data/Yang_Smith_2016/ds01/lakes_LC80070132013231LGN00_B8.shp").geometry
@@ -31,8 +31,8 @@ def get_catchments_russel(mesh):
     S_lakes = r_surf.interp_points((x_lakes, y_lakes), as_array=True)
 
     # merge catchments with additional manually drawn catchments
-    assert catchments.crs == additional_catchments.crs
-    catchments = gpd.GeoDataFrame(pd.concat([catchments, additional_catchments], ignore_index=True), crs=catchments.crs).geometry
+    # assert catchments.crs == additional_catchments.crs
+    # catchments = gpd.GeoDataFrame(pd.concat([catchments, additional_catchments], ignore_index=True), crs=catchments.crs).geometry
 
     # change crs of mesh points to match catchment/moulin/lake crs
     mesh_pts = gpd.GeoDataFrame(geometry=mesh_pts_list, crs=3413)
@@ -97,12 +97,22 @@ def get_catchments_russel(mesh):
     df.VTKFile('Greenland_data/russel/catchments_russel10.pvd').write(facet_functions[10])
     df.VTKFile('Greenland_data/russel/catchments_russel30.pvd').write(facet_functions[30])
     df.VTKFile('Greenland_data/russel/catchments_russel99.pvd').write(facet_functions[99])
+    df.VTKFile('Greenland_data/russel/catchments_russel.pvd').write(catchment_fct)
 
     # save input locations in dataframe
     # (convert back to mesh CRS (EPSG:3413) so these can be used directly with mesh coordinates)
     input_loc_gs = gpd.GeoSeries(input_loc, crs=catchments.crs).to_crs(3413)
     df_moul = pd.DataFrame({"x": [p.x for p in input_loc_gs], "y": [p.y for p in input_loc_gs]})
-    return df_moul, facet_functions
+
+    # save distributed melt mask where there are no catchments --> distributed melt forcing
+    i_catchment = np.nonzero(catchment_fct.dat.data_ro)[0]
+    mean_S = np.mean(S.dat.data_ro[i_catchment])
+    i_distributed = np.where((catchment_fct.dat.data_ro == 0) & (S.dat.data_ro < mean_S))
+    distributed_melt_mask = df.Function(df.Function(DG0)).interpolate(0)
+    distributed_melt_mask.dat.data[i_distributed] = 1
+    df.VTKFile('Greenland_data/russel/distributed_melt_mask.pvd').write(distributed_melt_mask)
+
+    return df_moul, facet_functions, distributed_melt_mask
 
 # other option: calculate moulins instead of using the manually drawn ones:
 

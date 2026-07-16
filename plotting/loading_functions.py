@@ -3,6 +3,7 @@ from firedrake.checkpointing import CheckpointFile
 import models_main.helpers as hlp
 import numpy as np
 import geoutils as gu
+import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 import os
@@ -25,10 +26,14 @@ def load_model_output(timeseries_path):
         us_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/Us/Us'][()].T  # (nodes, timesteps)
         m_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/m/m'][()].T
         phi_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/phi/phi'][()].T
+        N_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/N/N'][()].T
         q_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_2/vecs/q/q'][()].T
         Q_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/Q/Q'][()].T
         n_idx = us_raw.shape[1]
-    return us_raw, m_raw, phi_raw, q_raw, Q_raw, n_idx
+    # with h5py.File("parameter_runs/run_161/time_series.h5", 'r') as h5file:
+    #     m_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/m/m'][()].T
+        # n_idx = m_raw.shape[1]
+    return us_raw, m_raw, phi_raw, q_raw, Q_raw, n_idx, N_raw
 
 # load topography
 def load_topography(mesh_, sig=5):
@@ -45,8 +50,169 @@ def load_topography(mesh_, sig=5):
     S.interpolate(B+H)
     return B, H, S
 
+def get_profile(flowlines_path, glacier_name): #, distance_points=None, delta_point=200):
+    df_profile = pd.read_csv(flowlines_path+glacier_name.replace(" ", "-") +".csv")
+    dists = np.zeros(len(df_profile.X))
+    for (ip, (px,py)) in enumerate(zip(df_profile.X,df_profile.Y)):
+        dists[ip] = np.sqrt((px-df_profile.X[0])**2 + (py-df_profile.Y[0])**2)
+    return dists, np.array(df_profile.X), np.array(df_profile.Y)
+
+def get_obs_files(files, xrange):
+    date_pattern = r'\d{2}[A-Z][a-z]{2}\d{2}'
+    format_string = "%d%b%y"
+    date_list = []
+    for f in files:
+        date_str    = re.findall(date_pattern, f)
+        d0 = datetime.strptime(date_str[0], format_string)
+        d1 = datetime.strptime(date_str[1], format_string)
+        date_object = d0 + (d1-d0)/2
+        date_list.append(date_object)
+    pairs = zip(date_list, files)
+    sorted_dates, sorted_files = zip(*sorted(pairs))
+    sorted_dates, sorted_files = np.array(sorted_dates), np.array(sorted_files)
+    i_in_range = np.where((sorted_dates>xrange[0]) & (sorted_dates<xrange[-1]))
+    sorted_dates = sorted_dates[i_in_range]
+    sorted_files = sorted_files[i_in_range]
+    return sorted_dates, sorted_files
+
+def interpolate_raster_to_points(file, xc, yc, min_x=-232904, max_x=-27945, min_y=-2578142, max_y=-2473340):
+    r = gu.Raster(file)
+    delta = r.res[0]*2
+    r.crop([min_x-delta, min_y-delta, max_x+delta, max_y+delta], inplace=True)
+    vals = r.interp_points((xc, yc), as_array=True)
+    return vals
+
+def get_raster(file, min_x=-232904, max_x=-27945, min_y=-2578142, max_y=-2473340):
+    r = gu.Raster(file)
+    delta = r.res[0]*2
+    r.crop([min_x-delta, min_y-delta, max_x+delta, max_y+delta], inplace=True)
+    return r
+
+def interpolate_meshfct_to_profile(F, xc, yc):
+    points = [(x,y) for (x,y) in zip(xc,yc)]
+    vals  = F(points)
+    return vals
+
+def load_obs_timeseries(vel_dir, sorted_files, xc, yc):
+    n_obs = len(sorted_files)
+    U_obs = np.zeros((n_obs, len(xc)))
+    for (i_time,f) in enumerate(sorted_files):
+        r = get_raster(vel_dir+f)
+        for (i_point,(xx,yy)) in enumerate(zip(xc,yc)):
+            U_obs[i_time,i_point] = np.mean(r.interp_points((xx, yy), as_array=True))
+    return U_obs
+
+def load_model_timeseries(mesh, field, xc, yc, i_model, element="CG", order=1):
+    V = df.FunctionSpace(mesh, element, order)
+    F_timeseries = np.zeros((len(i_model), len(xc)))
+    for (i_time, i_m) in enumerate(i_model):
+        F = df.Function(V)
+        F.dat.data[:] = field[:, i_m]
+        for (i_point,(xx, yy)) in enumerate(zip(xc,yc)):
+            F_timeseries[i_time,i_point] = np.mean(interpolate_meshfct_to_profile(F, xx, yy))
+    return F_timeseries
+
+def load_model_timeseries_Pw_Pi(mesh, phi_raw, xc, yc, i_model, B, H, element="CG", order=1):
+    V = df.FunctionSpace(mesh, element, order)
+    F_timeseries = np.zeros((len(i_model), len(xc)))
+    for (i, i_m) in enumerate(i_model):
+        phi = df.Function(V)
+        phi.dat.data[:] = phi_raw[:, i_m]
+        pw_pi = df.Function(V)
+        pw_pi.interpolate((phi-1000*9.81*B)/(910*9.81*H))
+        F_timeseries[i,:] = interpolate_meshfct_to_profile(pw_pi, xc, yc)
+    return F_timeseries
+
+# for q and Q: need to average over a certain area for it to be meaningful
+def slice(s,s0,s1):
+    return df.conditional(df.And(s > s0, s<=s1), 1.0, 0.0)
+
+def get_flux_ratio(q, Q, smesh_, s, s_sub, s0s):
+    Qi = []
+    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
+        chi = slice(s, s0, s1)
+        chi_s = slice(s_sub, s0, s1)
+        # Integrate q over bulk domain and Q over submesh (boundary)
+        Q_flux = df.assemble(df.avg(Q)*chi_s*df.dx(domain=smesh_)) / df.assemble(chi_s*df.dx(domain=smesh_)) # on the submesh, dx is along traces, so 1D not 2D
+        q_flux = df.assemble(q*chi*df.dx) / df.assemble(chi*df.dx)
+        Qi.append(Q_flux/(Q_flux+q_flux))
+    return Qi
+
+def get_Q(Q, smesh_, s_sub, s0s):
+    Qi = []
+    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
+        chi_s = slice(s_sub, s0, s1)
+        Q_avg = df.assemble(Q*chi_s*df.dx(domain=smesh_)) / df.assemble(chi_s*df.dx(domain=smesh_)) # average
+        Qi.append(Q_avg)
+    return Qi
+
+def get_q(q, mesh_, s, s0s):
+    qi = []
+    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
+        chi = slice(s, s0, s1)
+        q_avg = df.assemble(df.avg(q*chi)*df.dS) / df.assemble(df.avg(chi)*df.dS) # average
+        qi.append(q_avg)
+    return qi
+
+def load_model_timeseries_discharges(mesh, smesh, q_raw, Q_raw, i_model, s, s_sub, dist, delta, element="CG", order=1):
+    V = df.FunctionSpace(mesh, element, order)
+    V_sub = df.FunctionSpace(smesh, "DG", 0)
+    q_timeseries = np.zeros(len(i_model))
+    Q_timeseries = np.zeros(len(i_model))
+    for (i, i_m) in enumerate(i_model):
+        # q, sheet discharge
+        q_vec_x = q_raw[::2, i_m]
+        q_vec_y = q_raw[1::2, i_m]
+        q = df.Function(V)
+        q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2)
+        q_timeseries[i] = get_q(q, mesh, s, [dist-delta/2, dist+delta/2])[0]
+
+        # Q, channel discharge; scalar on submesh
+        Q = df.Function(V_sub)
+        Q.dat.data[:] = Q_raw[:, i_m]
+        Q_timeseries[i] = get_Q(Q, smesh, s_sub, [dist-delta/2, dist+delta/2])[0]
+    return q_timeseries, Q_timeseries
+
+# load flowlines
+# def segment_lengths(coords):
+#     # Calculate Euclidean distance between each pair
+#     dist = [0.0]
+#     dist.extend([Point(coords[i]).distance(Point(coords[i+1])) for i in range(len(coords)-1)])
+#     return np.cumsum(dist)
+
+def get_s_functions(dists,  xc, yc, mesh_, smesh_, profile_width):
+    # make list from x and y coordinates
+    coords = [(x,y) for (x,y) in zip(xc,yc)]
+    pts_flowl = [Point(c) for c in coords]
+
+    # create function that holds the s function (how far along the profile, in a projected sense)
+    V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
+    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
+    s = df.Function(V_DG0)
+    for (i,(mx, my)) in enumerate(zip(meshx_DG0, meshy_DG0)):
+        dist_to_flowl_pts = Point(mx,my).distance(pts_flowl)
+        i_flowl = np.argmin(dist_to_flowl_pts)
+        if dist_to_flowl_pts[i_flowl] < profile_width:
+            s.dat.data[i] = dists[i_flowl]
+
+    # same for submesh
+    V_DGO_sub = df.FunctionSpace(smesh_, "DG", 0)
+    meshx_DG0_sub, meshy_DG0_sub = zip(*hlp.get_coordinates(smesh_, "DG", 0))
+    s_sub = df.Function(V_DGO_sub)
+    for (i,(mx, my)) in enumerate(zip(meshx_DG0_sub, meshy_DG0_sub)):
+        dist_to_flowl_pts = Point(mx,my).distance(pts_flowl)
+        i_flowl = np.argmin(dist_to_flowl_pts)
+        if dist_to_flowl_pts[i_flowl] < profile_width:
+            s_sub.dat.data[i] = dists[i_flowl]
+
+    # save as pvd files for visual check
+    df.VTKFile("s.pvd").write(s)
+    df.VTKFile("s_sub.pvd").write(s_sub)
+
+    return s, s_sub
+
 # load velocity observations
-def load_vel_obs(vel_dir, files, mesh_, element="DG", order=0, xrange=(datetime(2018,1,2),datetime(2021,12,30))):
+def load_obs_FunctionSpace(vel_dir, files, mesh_, xrange=(datetime(2016,1,2),datetime(2024,12,30))):
     # extract datetime object from filenames and sort after date
     date_pattern = r'\d{2}[A-Z][a-z]{2}\d{2}'
     format_string = "%d%b%y"
@@ -64,13 +230,12 @@ def load_vel_obs(vel_dir, files, mesh_, element="DG", order=0, xrange=(datetime(
     sorted_dates = sorted_dates[i_in_range]
     sorted_files = sorted_files[i_in_range]
     # get function space
-    V_DG0 = df.FunctionSpace(mesh_, element, order)
-    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, element, order))
+    V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
+    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
     # read files in order
     n_months = len(sorted_files)
     U_obs = []
     U_mask = []
-    rasters = []
     for (i,f) in enumerate(sorted_files[:n_months]):
         r = gu.Raster(f"{vel_dir}{f}")
         delta = r.res[0]*2
@@ -85,125 +250,6 @@ def load_vel_obs(vel_dir, files, mesh_, element="DG", order=0, xrange=(datetime(
         mask.dat.data[i_finite] = 1
         U_obs.append(U)
         U_mask.append(mask)
-        rasters.append(r)
         # # save for visual check
         # df.VTKFile("s_obs.pvd").write(U_obs[0])
-    return sorted_dates, U_obs, U_mask, rasters
-
-# load flowlines
-def segment_lengths(line):
-    # Extract coordinates as a list
-    coords = list(line.coords)
-    # Calculate Euclidean distance between each pair
-    dist = [0.0]
-    dist.extend([Point(coords[i]).distance(Point(coords[i+1])) for i in range(len(coords)-1)])
-    return np.cumsum(dist)
-
-def get_s_functions(flowlines_path, fl, mesh_, smesh_, profile_width):
-    # load geopackage file
-    gdf = gpd.read_file(flowlines_path)
-
-    # calculate distance along flow
-    gdf['dist_along_flow'] = gdf.geometry.apply(segment_lengths)
-    pts_flowl = [Point(c) for c in gdf.geometry[fl].coords]
-
-    # create function that holds the s function (how far along the profile, in a projected sense)
-    V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
-    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
-    s = df.Function(V_DG0)
-    for (i,(mx, my)) in enumerate(zip(meshx_DG0, meshy_DG0)):
-        dist_to_flowl_pts = Point(mx,my).distance(pts_flowl)
-        i_flowl = np.argmin(dist_to_flowl_pts)
-        if dist_to_flowl_pts[i_flowl] < profile_width:
-            s.dat.data[i] = gdf["dist_along_flow"][fl][i_flowl]
-
-    # same for submesh
-    V_DGO_sub = df.FunctionSpace(smesh_, "DG", 0)
-    meshx_DG0_sub, meshy_DG0_sub = zip(*hlp.get_coordinates(smesh_, "DG", 0))
-    s_sub = df.Function(V_DGO_sub)
-    for (i,(mx, my)) in enumerate(zip(meshx_DG0_sub, meshy_DG0_sub)):
-        dist_to_flowl_pts = Point(mx,my).distance(pts_flowl)
-        i_flowl = np.argmin(dist_to_flowl_pts)
-        if dist_to_flowl_pts[i_flowl] < profile_width:
-            s_sub.dat.data[i] = gdf["dist_along_flow"][fl][i_flowl]
-
-    # save as pvd files for visual check
-    df.VTKFile("s.pvd").write(s)
-    df.VTKFile("s_sub.pvd").write(s_sub)
-
-    return s, s_sub
-
-def get_timestamps(mesh_, smesh_, B, H, us_raw, phi_raw, q_raw, Q_raw, m_raw, n_idx, idx=None):
-    V = df.FunctionSpace(mesh_, "CG", 1)
-    V_vec = df.VectorFunctionSpace(mesh_, "CG", 1)
-    V_sub = df.FunctionSpace(smesh_, "DG", 0)
-
-    if idx is not None:
-        # Return single timestep
-        # Us: already scalar, just reshape
-        Us = df.Function(V)
-        Us.dat.data[:] = us_raw[:, idx]
-
-        # phi and derived quantities
-        phi = df.Function(V)
-        phi.dat.data[:] = phi_raw[:, idx]
-        # N   = df.Function(V)
-        # N.interpolate(910*9.81*H-(phi-1000*9.81*B))
-        pw_pi = df.Function(V)
-        pw_pi.interpolate((phi-1000*9.81*B)/(910*9.81*H))
-
-        # q: stored as 2-component vector, compute norm
-        q_vec_raw = q_raw[:, idx::2]  # Extract 2 components for this timestep
-        q = df.Function(V)
-        q.dat.data[:] = np.sqrt(q_vec_raw[:, 0]**2 + q_vec_raw[:, 1]**2)
-
-        # Q: scalar on submesh
-        Q = df.Function(V_sub)
-        Q.dat.data[:] = Q_raw[:, idx]
-
-        # m: scalar on main mesh
-        m = df.Function(V)
-        m.dat.data[:] = m_raw[:, idx]
-
-        return q, Q, Us, m
-    else:
-        # Return all timesteps as lists
-        q_list = []
-        Q_list = []
-        Us_list = []
-        pw_pi_list = []
-        m_list = []
-
-        for i in range(n_idx):
-            # Us
-            Us = df.Function(V)
-            Us.dat.data[:] = us_raw[:, i]
-            Us_list.append(Us)
-
-            # phi and derived quantities
-            phi = df.Function(V)
-            phi.dat.data[:] = phi_raw[:, i]
-            pw_pi = df.Function(V)
-            pw_pi.interpolate((phi-1000*9.81*B)/(910*9.81*H))
-            pw_pi_list.append(pw_pi)
-
-            # q: compute norm from 2-component vector
-            q = df.Function(V)
-            # q is stored as interleaved [q_x[0], q_y[0], q_x[1], q_y[1], ...]
-            q_vec_x = q_raw[::2, i]
-            q_vec_y = q_raw[1::2, i]
-            q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2)
-            q_list.append(q)
-
-            # Q
-            Q = df.Function(V_sub)
-            Q.dat.data[:] = Q_raw[:, i]
-            Q_list.append(Q)
-
-            # m
-            m = df.Function(V)
-            m.dat.data[:] = m_raw[:, i]
-            m_list.append(m)
-
-        return q_list, Q_list, Us_list, pw_pi_list, m_list
-
+    return sorted_dates, U_obs, U_mask

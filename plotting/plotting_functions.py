@@ -4,36 +4,8 @@ import models_main.helpers as hlp
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import matplotlib.dates as mdates
-
-def slice(s,s0,s1):
-    return df.conditional(df.And(s > s0, s<=s1), 1.0, 0.0)
-
-def get_flux_ratio(q, Q, smesh_, s, s_sub, s0s):
-    Qi = []
-    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
-        chi = slice(s, s0, s1)
-        chi_s = slice(s_sub, s0, s1)
-        # Integrate q over bulk domain and Q over submesh (boundary)
-        Q_flux = df.assemble(df.avg(Q)*chi_s*df.dx(domain=smesh_)) / df.assemble(chi_s*df.dx(domain=smesh_)) # on the submesh, dx is along traces, so 1D not 2D
-        q_flux = df.assemble(q*chi*df.dx) / df.assemble(chi*df.dx)
-        Qi.append(Q_flux/(Q_flux+q_flux))
-    return Qi
-
-def get_Q(Q, smesh_, s_sub, s0s):
-    Qi = []
-    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
-        chi_s = slice(s_sub, s0, s1)
-        Q_avg = df.assemble(Q*chi_s*df.dx(domain=smesh_)) / df.assemble(chi_s*df.dx(domain=smesh_)) # average
-        Qi.append(Q_avg)
-    return Qi
-
-def get_q(q, mesh_, s, s0s):
-    qi = []
-    for (s0,s1) in zip(s0s[:-1],s0s[1:]):
-        chi = slice(s, s0, s1)
-        q_avg = df.assemble(df.avg(q*chi)*df.dS) / df.assemble(df.avg(chi)*df.dS) # average
-        qi.append(q_avg)
-    return qi
+import geoutils as gu
+import pandas as pd
 
 def get_variable(X, mesh_, s, s0s, mask=None):
     # get function space
@@ -77,7 +49,7 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
-    ax.vlines([datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
+    ax.vlines([datetime(2018,1,1), datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1]))
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=7))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
@@ -97,48 +69,40 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
     panel_label = idx_to_letter(panel_idx)
     ax.annotate(panel_label, xy=(0.03,0.9), xycoords="axes fraction", fontsize=18, fontweight="bold")
 
-def plot_vel_timeseries(mesh_, splus, s, dates_model, Us, m, sorted_dates, U_obs, U_mask, xstart, xend, i_model, color, lw, ds, ig, n_glaciers, model_label, ax1):
-    # get function space coordinates
-    meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
-    meshx, meshy = zip(*hlp.get_coordinates(mesh_, "CG", 1))
-    # get coordinates of points to plot
-    p_DG0  = np.argmin(abs(s.dat.data_ro-splus))
-    xi, yi = meshx_DG0[p_DG0], meshy_DG0[p_DG0]
-    p_CG1  = np.argmin(np.sqrt((xi-meshx)**2+(yi-meshy)**2))
-    xi2, yi2 = meshx[p_CG1], meshy[p_CG1]
-
+def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1):
     # observations, plot only if the ax is empty still to avoid re-doing it several times
     if len(ax1.lines) == 0:
-        Uobs_time = []
-        for (Uobs,mask) in zip(U_obs, U_mask):
-            # Uobs_time.append(Uobs.dat.data_ro[p_DG0])
-            Uobs_time.append(get_variable(Uobs, mesh_, s, [splus-ds/2,splus+ds/2],mask=mask)[0])
-        i_obs = np.where( (np.array(sorted_dates) > xstart) &  (np.array(sorted_dates) < xend) )[0]
-        obs_mean = np.mean(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])
-        # plt.plot(sorted_dates, Uobs_time-obs_mean, label=f"observations", color="black", lw=lw, ls="dashed")
-        ax1.plot(sorted_dates, Uobs_time, label=f"Observations", color="black", lw=lw, ls="dashed", marker="o", markersize=5)
+        obs_mean = np.mean(np.array(Uobs)[np.where(np.isfinite(Uobs))])
+        ax1.plot(obs_dates, Uobs-obs_mean, label=f"observations", color="black", lw=lw, ls="dashed", marker="o", markersize=5)
+        # ax1.plot(sorted_dates, Uobs_time, label=f"Observations", color="black", lw=lw, ls="dashed", marker="o", markersize=5)
 
     # model
-    Umod_time = []
-    m_time    = []
-    # for i in range(n_idx):
-        # with CheckpointFile(timeseries_path, 'r') as afile:
-            # Umod_time.append(afile.load_function(mesh_, "Us", idx=i).dat.data_ro[p_CG1])
-    for (Umod,m_) in zip(Us,m):
-        Umod_time.append(get_variable(Umod, mesh_, s, [splus-ds/2,splus+ds/2])[0])
-        m_time.append(get_variable(m_, mesh_, s, [splus-ds/2,splus+ds/2])[0])
-    model_mean = np.array(Umod_time)[i_model].mean()
-    # plt.plot(dates_model, Umod_time-model_mean, label=f"model", color=color, ls="solid", lw=lw)
-    ax1.plot(dates_model[1:], Umod_time[1:], label=model_label, color=color, ls="solid", lw=lw)
+    # convert to dataframe in order to calculate 10-day mean
+    dates = pd.to_datetime(dates_model)
+    df_model = pd.DataFrame(Umodel, index=dates)
+
+    model_resampled = df_model.resample('10D').mean()
+    model_centered = model_resampled.values - model_resampled.values.mean()
+    ax1.plot(model_resampled.index, model_centered, label=model_label, color=color, ls="solid", lw=lw)
+    # ax1.plot(dates_model[1:], Umod_time[1:], label=model_label, color=color, ls="solid", lw=lw)
 
     # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    # format_ax(ax, xstart, xend, ig, ylims=(-80,105), ylabel="Speed rel. to mean (m/yr)")
-    format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
+    format_ax(ax1, xstart, xend, ig, ylims=(-80,150), ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
+    # format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
 
     # melt input, also only plot once the first time
     if len(ax1.lines) == 2:
-        ax2 = ax1.twinx()
+        ax2_0 = ax1.inset_axes([0, 0, 1, 0.3], transform=ax1.transAxes, sharex=ax1)
+        ax2_0.patch.set_visible(False)          # no background
+        ax2_0.tick_params(axis='y', labelleft=False, length=0)
+        ax2_0.tick_params(axis='x', labelbottom=False, length=0)
+        for spine in ax2_0.spines.values():
+            spine.set_visible(False)            # no box
+        ax2 = ax2_0.twinx()
+        ax2.patch.set_visible(False)
+        for spine in ax2.spines.values():
+            spine.set_visible(False)            # no box
         ax2.fill_between(dates_model, m_time, color="grey", alpha=0.3)
         ax2.tick_params(axis='y', labelright=False, colors="grey", length=7, width=2)
         if (ig==n_glaciers-1):

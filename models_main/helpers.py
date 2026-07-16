@@ -51,7 +51,7 @@ def save_params_to_csv(args, params_output_file, success=True):
         df_params.to_csv(params_output_file, index=False)
 
 def get_params_from_input_file(run_index):
-    input_file = f"parameter_runs/run_{run_index}/input_run{run_index}.sh"
+    input_file = f"parameter_runs/run_{run_index}/parameters.txt"
 
     float_params = {}
     with open(input_file) as f:

@@ -96,7 +96,7 @@ elif args.melt_input == "avg":
     m, calc_m = hlp.melt_fct_avg(hydro, H)
 
 # moulins
-df_moul, facet_functions = get_catchments_russel(mesh)
+df_moul, facet_functions, distributed_melt_mask = get_catchments_russel(mesh)
 
 # get moulin coordinates that are exactly on the nodes
 coords = hlp.get_coordinates(mesh, "CG", 1)
@@ -129,7 +129,7 @@ dt0= 2*hour
 
 # get beta2 from inversion
 # chk_file = "test_inversion/beta2_opt_1e-3.h5"
-chk_file = "test_inversion/beta2_opt_1e-3_run187.h5"
+chk_file = "test_inversion/beta2_opt_1e-2.5_run311_new.h5"
 with CheckpointFile(chk_file, 'r') as afile:
         mesh_ = afile.load_mesh()
         beta2 = afile.load_function(mesh_, name="beta2")
@@ -203,6 +203,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                     M_moulins[ii] = df.assemble(m_DG0*dx_c(ii))
                 Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
                 hydro.Qm.interpolate(Qm)
+                hydro.m.interpolate(m_CG1*distributed_melt_mask)
             else:
                 hydro.m.interpolate(m_CG1)
 
@@ -247,7 +248,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 d = int(t*365)
                 f_melt.write(m_CG1, time=t)
                 # hydro.write_variables_pvd(t)
-                # stokes.write_variables_pvd(t)
+                stokes.write_variables_pvd(t)
                 afile.save_function(stokes.Us, idx=i, name="Us")
                 # afile.save_function(stokes.Ub, idx=i, name="Ub")
                 afile.save_function(coupler.U.sub(0), idx=i, name="phi")
@@ -255,8 +256,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 Q_subDG0 = hlp.save_DGT0(mesh, hydro.Q_submesh, df.project(abs(hydro.Q),hydro.V_S), hydro.Q_save, hydro.outfile_Q, t)
                 afile.save_function(Q_subDG0, idx=i, name="Q")
                 afile.save_function(coupler.U.sub(1), idx=i, name="h")
-                # afile.save_function(m_CG1, idx=i, name="m")
-                # afile.save_function(df.project(hydro.N, coupler.Q_cg), idx=i, name="N")
+                afile.save_function(m_CG1, idx=i, name="m")
+                afile.save_function(df.project(hydro.N, coupler.Q_cg), idx=i, name="N")
                 i += 1
 
         except df.exceptions.ConvergenceError:

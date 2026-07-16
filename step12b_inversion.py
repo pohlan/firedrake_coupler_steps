@@ -4,7 +4,7 @@ from firedrake.adjoint import minimize, ReducedFunctional, Control, continue_ann
 import firedrake as df
 from models_main.coupled_model import GLADS, SpecFO, Coupler_Flow, Coupler_Flow_Hydro
 import models_main.helpers as hlp
-from plotting.loading_functions import load_vel_obs, load_model_output
+from plotting.loading_functions import *
 import numpy as np
 import geoutils as gu
 
@@ -28,8 +28,8 @@ vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/month
 # vel_file = "GL_vel_mosaic_Monthly_01Jan19_31Jan19_vv_v05.0.tif"
 vel_file = "GL_vel_mosaic_Monthly_01Nov18_30Nov18_vv_v05.0.tif"
 # vel_file = "GL_vel_mosaic_Monthly_01Jul21_31Jul21_vv_v05.0.tif"
-vel_dates, Us_obs, Us_mask, _ = load_vel_obs(vel_dir, [vel_file], mesh, element="CG", order=1)
-
+vel_dates, Us_obs, Us_mask = load_obs_FunctionSpace(vel_dir, [vel_file], mesh)
+print(vel_dates)
 Us_obs = Us_obs[0]
 Us_mask = Us_mask[0]
 
@@ -56,14 +56,16 @@ Uhat   = df.Constant(50)
 Nhat   = df.Constant(917*9.81*H_mean)
 
 # get N from model output
-run_index = 187
-idx       = int(365/2*2.9)
+run_index = 311
+idx       = int(365/2*4.9)   # 4.87 = November 15, 2018
 model_file = f"parameter_runs/run_{run_index}/time_series.h5"
-_, _, phi_raw, _, _, n_idx = load_model_output(model_file)
-phi = df.Function(coupler.Q_cg)
-phi.dat.data[:] = phi_raw[:, idx]
-N   = df.Function(coupler.Q_cg)
-N.interpolate(910*9.81*H-(phi-1000*9.81*B))
+_, _, phi_raw, _, _, n_idx, N_raw = load_model_output(model_file)
+N = df.Function(coupler.Q_cg)
+N.dat.data[:] = N_raw[:, idx]
+# phi = df.Function(coupler.Q_cg)
+# phi.dat.data[:] = phi_raw[:, idx]
+# N   = df.Function(coupler.Q_cg)
+# N.interpolate(910*9.81*H-(phi-1000*9.81*B))
 N.dat.data[:] = np.maximum(N.dat.data[:], 1e5)
 N.dat.data[:] = np.minimum(N.dat.data[:], 910*9.81*H.dat.data[:])
 
@@ -108,7 +110,7 @@ try:
 except df.ConvergenceError:
     J = 1e20
 
-alpha = 10**(-3.5)   # tune this
+alpha = 10**(-2)   # tune this
 J_reg = alpha * df.inner(df.grad(m), df.grad(m))*df.dx
 
 # print("Initial J_misfit:", df.assemble(J_reg))
@@ -117,8 +119,8 @@ J = df.assemble(J_misfit + J_reg)
 Jhat    = ReducedFunctional(J, Control(m))
 result = minimize(Jhat, method="L-BFGS-B", bounds=(1e5, 6e6)) #, options={"maxiter": 100})
 
-df.VTKFile(results_dir+f"beta2_opt_1e{int(np.log10(alpha))}_run{run_index}.pvd").write(result)
-with df.CheckpointFile(f"{results_dir}/beta2_opt_1e{int(np.log10(alpha))}_run{run_index}.h5", 'w') as afile:
+df.VTKFile(results_dir+f"beta2_opt_1e{round(np.log10(alpha),ndigits=1)}_run{run_index}_new.pvd").write(result)
+with df.CheckpointFile(f"{results_dir}/beta2_opt_1e{round(np.log10(alpha),ndigits=1)}_run{run_index}_new.h5", 'w') as afile:
     afile.save_mesh(mesh)
     afile.save_function(result, name="beta2")
 
