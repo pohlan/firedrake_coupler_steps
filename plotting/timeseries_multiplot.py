@@ -15,8 +15,8 @@ vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/month
 profile_width = 4.5e3
 glacier_ids = [1,1,4,4]
 n_glaciers = len(glacier_ids)
-ds_upglacier = [10e3,25e3,15e3,25e3]
-deltas_upglacier = [500,3000,500,3000]
+ds_upglacier = [10e3,30e3,15e3,23e3]
+deltas_upglacier = [500,500,500,500]
 glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Isorlersuup", "Isorlersuup"]
 # glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Russel"]
 run_indices = [311,420]
@@ -24,7 +24,7 @@ model_start_years = [2014,2014] # ToDo: automate this
 model_labels = ["baseline", "reduced \nsheet flow"]
 
 # time period to plot
-xstart,xend = datetime(2017,1,2),datetime(2021,12,30)
+xstart,xend = datetime(2017,1,2),datetime(2022,12,30)
 
 # load glacier flowline coordinates and distances along profile
 x_points = []
@@ -72,7 +72,7 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
     # load model output from hdf5 file
     mesh_, smesh_ = get_meshes(timeseries_path)
     B, H, S = load_topography(mesh_)
-    us_raw, m_raw, phi_raw, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
+    us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
 
     for (ig,(gl, gl_name, d_along_profile, delta, Uobs, xc, yc)) in enumerate(zip(glacier_ids, glacier_names, ds_upglacier, deltas_upglacier, zip(*Uobs_glaciers), x_points, y_points)):
         # flow linestrings don't have the same numbering as gl; also gl starts at 1

@@ -11,18 +11,20 @@ from datetime import datetime, timedelta
 import firedrake as df
 from firedrake.pyplot import tripcolor
 import cmcrameri.cm as cmc
+import matplotlib.colors as colors
 
-run_indices = [161,191]
-Q_min     = 6e8
-vmax = 1e10
+run_indices = [323,455]
+model_labels  = ["Baseline", "Reduced \nsheet flow"]
+Q_min     = 15
+# vmax = 5e10
 
 flowlines_path = "Greenland_data/russel/flowlines.gpkg"
 outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 vel_dir = "Greenland_data/velocity/monthly/"
 
 # plotting parameters
-plt.rcParams['font.size'] = 23
-annotate_fs = 23
+plt.rcParams['font.size'] = 32
+annotate_fs = 32
 
 # load model input independent of run
 timeseries_path = f"parameter_runs/run_{run_indices[0]}/time_series.h5"
@@ -31,7 +33,7 @@ coords = smesh_.coordinates.dat.data  # mesh coordinates
 B, H, S = load_topography(mesh_, sig=5)
 
 
-def get_Q_lines(Q_vals):
+def get_Q_lines(Q_vals, ax, cax):
     # Get cell-vertex connectivity using CG function space
     V_CG = df.FunctionSpace(smesh_, "CG", 1)
     cells = V_CG.cell_node_list
@@ -58,61 +60,73 @@ def get_Q_lines(Q_vals):
                 lines.append([p1[:2], p2[:2]])
                 colors.append(q_val)
     # Create LineCollection and add to plot
-    lc = mc.LineCollection(lines, cmap='Greys',
-                           norm=plt.Normalize(vmin=np.nanmin(Q_vals)*(1), vmax=Q_min*1000))
+    # lc = mc.LineCollection(lines, cmap='Greys',
+                        #    norm=plt.Normalize(vmin=np.nanmin(Q_vals)*(1), vmax=Q_min*1000))
+    lc = mc.LineCollection(lines, cmap=cmc.lajolla_r, norm=plt.Normalize(vmin=Q_min, vmax=140), joinstyle='round', capstyle='round')
+                        #    norm=plt.Normalize(vmin=np.nanmin(Q_vals)*(1), vmax=Q_min))
     lc.set_array(np.array(colors))
-    lc.set_linewidth(1.5)
+    lc.set_linewidth(3)
+    cbar = fig.colorbar(lc, ax=cax)
+    cbar.set_label(r"$Q\,(\mathrm{m^3 s^{-1}})$")
 
     return lc
 
+    # remove spines (box around plot)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
 # Create figure and plot
-fig, axes = plt.subplots(2,2, figsize=(14, 12))
+fig = plt.figure(figsize=(30, 14))
+gs = fig.add_gridspec(2, 3, left=0.12, right=0.93, top=0.92, bottom=0, hspace=0.0, wspace=0.1, width_ratios=[1,1,0.12], height_ratios=[1,1])
+
 
 for (i_r,run_index) in enumerate(run_indices):
     # load model output
     timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
-    us_raw, m_raw, phi_raw, q_raw, Q_raw, n_idx = load_model_output(timeseries_path)
-    for (i_s,season) in enumerate(["summer","winter"]):
-        idx = {'winter': int(2*365/2), 'summer': int(1.53*365/2)}[season]
+    us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
+    for (i_s,season) in enumerate(["Winter","Summer"]):
+        idx = {'Winter': int(6.05*365/2), 'Summer': int(6.53*365/2)}[season]
+        ax = fig.add_subplot(gs[i_r,i_s])
 
-        # extract Pw/Pi for the specified timestep
+        # extract q for the specified timestep
         V   = df.FunctionSpace(mesh_, "CG", 1)
-        phi = df.Function(V)
-        phi.dat.data[:] = phi_raw[:, idx]
-        pw_pi = df.Function(V)
-        pw_pi.interpolate((phi-1000*9.81*B)/(910*9.81*H))
+        q_vec_x = q_raw[::2, idx]
+        q_vec_y = q_raw[1::2, idx]
+        q = df.Function(V)
+        q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2) / (3600*24*365)
 
-        # extract Q for the specified timestep
-        Q_vals = Q_raw[:, idx]
-        Q_vals[np.where(Q_vals<Q_min)] = np.nan
-        lc = get_Q_lines(Q_vals)
 
-        # pw_pi
-        ax = axes[i_r,i_s]
-        cl = tripcolor(pw_pi, axes=ax, cmap=cmc.lapaz, vmin=-0.5, vmax=1.0)
-        fig.colorbar(cl, label=r"$p_w/p_i$")
-        # Q
-        ax.add_collection(lc)
-        # cbar = fig.colorbar(lc, ax=ax, label='Q (discharge)')
+
+        # h = df.Function(V)
+        # h.dat.data[:] = h_raw[:,idx]
+
+        cl = tripcolor(q, axes=ax, cmap=cmc.lapaz, norm=colors.LogNorm(vmin=1e-5, vmax=0.1))
+        cax1 = fig.add_subplot(gs[0, 2])
+        cbar = fig.colorbar(cl, ax=cax1, label=r"$q\,(\mathrm{m^2 s^{-1}})$")
 
         # domain outline
         gdf = gpd.read_file(outline_path)
         gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2, label='Domain')
 
-        ax.set_aspect('equal')
-        ax.set_xlim(-2.4e5,-1.6e5)
-        ax.set_ylim(-2.565e6,-2.47e6)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        # Remove spines (box around plot)
-        for spine in ax.spines.values():
-            spine.set_visible(False)
+        # extract Q for the specified timestep
+        Q_vals = Q_raw[:, idx] / (3600*24*365)
+        Q_vals[np.where(Q_vals<Q_min)] = np.nan
+
+        cax2 = fig.add_subplot(gs[1, 2])
+        lc = get_Q_lines(Q_vals, ax, cax2)
+        ax.add_collection(lc)
+
+        remove_axes(ax)
+        remove_axes(cax1)
+        remove_axes(cax2)
 
         if i_s == 0:
-            ax.annotate(f"M{i_r}", xy=[-0.1,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+            model_label = model_labels[i_r]
+            ax.annotate(model_label, xy=[-0.15,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
         if i_r == 0:
             ax.annotate(season, xy=[0.5,1.1], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
-        ax.annotate(f"{idx_to_letter(i_r*2+i_s)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+        ax.annotate(f"{idx_to_letter(i_r*2+i_s)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.9, fontweight="bold")
+
 
 
 # # add markers and annotations
@@ -135,4 +149,4 @@ for (i_r,run_index) in enumerate(run_indices):
 
 plt.tight_layout()
 plt.savefig("plotting/main_figures/f04.jpg")
-plt.savefig(f"plotting/output_heatmap/Q_map_{run_indices[0]}_{run_indices[1]}.png", dpi=150)
+plt.savefig(f"plotting/output_heatmap/Q_map_{run_indices[0]}_{run_indices[1]}_q.png", dpi=150)

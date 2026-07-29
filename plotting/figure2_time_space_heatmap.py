@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import cmcrameri.cm as cmc
 
 # which glaciers and runs to plot
-run_index1, run_index2 = 310, 410
+run_index1, run_index2 = 312, 445
 model_start_yrs        = [2014, 2014]
 model_labels  = ["Baseline", "Reduced \nsheet flow"]
 glacier_ids = [1,2,3,4,5]
@@ -23,24 +23,24 @@ vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/month
 outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 
 # profile width and interval
-profile_width = 2e3
-delta = 2e3   # interval
-profile_stop = 50e3
+profile_width = 1e3
+delta = 1.5e3   # interval
+profile_stop = 40e3
 glacier_names = ["Isunnguata Sermia", "Russel", "Ørkendalen", "Isorlersuup", "Glacier 5"]
 ds_upglacier = np.arange(start=delta/2, stop=profile_stop,step=delta)
 
 # time period
-year = 2015
+year = 2021
 xstart,xend = datetime(year,1,2), datetime(year,12,31)
 
-ds_vline = [np.array([10e3,25e3]),[],[],np.array([15e3,25e3]),[]]
+ds_vline = [np.array([10e3,35e3]),[],[],np.array([15e3,23e3]),[]]
 
 # plotting parameters
 color_map = cmc.managua
 plt.rcParams['font.size'] = 33
 annotate_fs = 33
 lw = 2.5
-clims = (10,250)
+clims = (20,300)
 
 # load model stuff not run-specific
 timeseries_path = f"parameter_runs/run_{run_index1}/time_series.h5"
@@ -123,7 +123,7 @@ gls = [1,2,3,4,5]
 ds_timeseries = [np.array([10e3,30e3]),[],[],np.array([15e3,25e3]),[]]
 colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 
-annotate_offsets = [[-1e4,1e4],[-4e4,-5e3],[-4e4,-5e3],[-3.5e4,-1e4],[-2.7e4,-1e4]]
+annotate_offsets = [[-1e4,1e4],[-3e4,1e3],[-4e4,-8e3],[-3.5e4,-1e4],[-2.7e4,-1e4]]
 
 gl_names = ["Isunnguata-Sermia","Russel","Ørkendalen","Isorlersuup","Glacier-5"]
 gl_annotations = ["Isunnguata\n Sermia","Russel","Ørkendalen","Isorlersuup","Glacier 5"]
@@ -138,11 +138,14 @@ for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_na
     marker_x = []
     marker_y = []
     d_marker = [10e3, 25e3, 40e3]
-    for d in d_marker:
+    offsets_marker = [[-4e3,-8e3],[-5e3,-7e3],[-2e3,-8e3]]
+    for (d,m_offset) in zip(d_marker,offsets_marker):
         marker_x.append(xx[np.argmin(abs(dists-d))])
         marker_y.append(yy[np.argmin(abs(dists-d))])
-    topax.scatter(marker_x, marker_y, 80, c=col, edgecolors='black', marker="s",zorder=3)
-    topax.annotate(strng,[xx[0],yy[0]], xytext=[marker_x[0]+offset_crd[0],marker_y[0]+offset_crd[1]], c=col, fontsize=annotate_fs)
+        if gl == 3:
+            topax.annotate(f"{int(d*1e-3)} km",[marker_x[-1]+m_offset[0],marker_y[-1]+m_offset[1]], c=col, fontsize=annotate_fs)
+    topax.scatter(marker_x, marker_y, 150, c=col, edgecolors='black', marker="o",zorder=3)
+    topax.annotate(strng,[marker_x[0],marker_y[0]], xytext=[marker_x[0]+offset_crd[0],marker_y[0]+offset_crd[1]], c=col, fontsize=annotate_fs)
 
 fig.tight_layout()
 
@@ -206,7 +209,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 
         # load model output from hdf5 file
-        us_raw, m_raw, phi_raw, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
+        us_raw, m_raw, phi_raw, _, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
 
         # get model time vector
         start_date = datetime(model_start_yr, 1, 1)
@@ -267,7 +270,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         axi.set_xlim(0,np.max(ds_upglacier)*1e-3)
         axi.yaxis.set_major_locator(mdates.MonthLocator(interval=2))
         axi.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
-        axi.annotate(f"{idx_to_letter(i_run*len(glacier_ids)+ig)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+        axi.annotate(f"{idx_to_letter(i_run*len(glacier_ids)+ig+1)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
 
     ##########################
@@ -306,7 +309,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     xl = ax3.get_xlim()
     ax3.yaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax3.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
-    ax3.annotate(f"{idx_to_letter(2*len(glacier_ids)+ig)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+    ax3.annotate(f"{idx_to_letter(2*len(glacier_ids)+ig+1)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
             ax3.vlines(x=d_vline*1e-3, ymin=ax3.get_ylim()[0], ymax=ax3.get_ylim()[1], color='cyan', linestyle='-', lw=3)
@@ -347,7 +350,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         cax.axis("off")
     ax4.set_xlim(xl)
     # ax4.set_xlim(-0.5,(profile_stop+ds/2)*1e-3)
-    ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+    ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig+1)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
             ax4.vlines(x=d_vline*1e-3, ymin=ax4.get_ylim()[0], ymax=ax4.get_ylim()[1], color='cyan', linestyle='-', lw=3)

@@ -128,15 +128,15 @@ stokes.build_variables()
 dt0= 2*hour
 
 # get beta2 from inversion
-# chk_file = "test_inversion/beta2_opt_1e-3.h5"
-chk_file = "test_inversion/beta2_opt_1e-2.5_run311_new.h5"
+# chk_file = "test_inversion/beta2_opt_1e-1.0_run321_new1.h5"
+chk_file = "test_inversion/beta2_opt_1e-1.0_run451_new1_21.h5"
 with CheckpointFile(chk_file, 'r') as afile:
         mesh_ = afile.load_mesh()
         beta2 = afile.load_function(mesh_, name="beta2")
 df.VTKFile(results_dir+"beta2.pvd").write(beta2)
 
-stokes.build_forms(beta2=beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
-# stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)
+stokes.build_forms(beta2=beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat) # beta2 from inversion
+# stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)  # all constant
 hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
 # initial melt input to moulins
@@ -156,8 +156,8 @@ if hydro.moulins:
     Qm_file = df.VTKFile(results_dir+"moulin_dirac.pvd")
 
 # initialize (run into steady state)
-chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, beta2, results_dir)
-# chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, args.beta2, results_dir)
+chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, beta2, results_dir) # beta2 from inversion
+# chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, args.beta2, results_dir) # all constant
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))

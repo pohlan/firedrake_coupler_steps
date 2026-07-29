@@ -26,14 +26,18 @@ def load_model_output(timeseries_path):
         us_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/Us/Us'][()].T  # (nodes, timesteps)
         m_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/m/m'][()].T
         phi_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/phi/phi'][()].T
+        h_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/h/h'][()].T
         N_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/N/N'][()].T
         q_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_2/vecs/q/q'][()].T
         Q_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/Q/Q'][()].T
         n_idx = us_raw.shape[1]
-    # with h5py.File("parameter_runs/run_161/time_series.h5", 'r') as h5file:
-    #     m_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/m/m'][()].T
-        # n_idx = m_raw.shape[1]
-    return us_raw, m_raw, phi_raw, q_raw, Q_raw, n_idx, N_raw
+    return us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, N_raw
+
+def get_model_dates(n_idx, xstart, xend, start_year=2014):
+    start_date = datetime(start_year, 1, 1)
+    dates_model = [start_date + timedelta(days=2 * k) for k in range(n_idx)]
+    i_model = np.where((np.array(dates_model) > xstart) & (np.array(dates_model) < xend))[0]
+    return np.array(dates_model)[i_model], i_model
 
 # load topography
 def load_topography(mesh_, sig=5):
@@ -150,7 +154,7 @@ def get_q(q, mesh_, s, s0s):
     qi = []
     for (s0,s1) in zip(s0s[:-1],s0s[1:]):
         chi = slice(s, s0, s1)
-        q_avg = df.assemble(df.avg(q*chi)*df.dS) / df.assemble(df.avg(chi)*df.dS) # average
+        q_avg = df.assemble(q*chi*df.dx) / (s1-s0)
         qi.append(q_avg)
     return qi
 
@@ -253,3 +257,82 @@ def load_obs_FunctionSpace(vel_dir, files, mesh_, xrange=(datetime(2016,1,2),dat
         # # save for visual check
         # df.VTKFile("s_obs.pvd").write(U_obs[0])
     return sorted_dates, U_obs, U_mask
+
+def get_outflow_index_skeleton_mesh(mesh, smesh):
+
+    # Coordinates of mesh vertices
+    coords = mesh.coordinates.dat.data_ro
+
+    # Cell -> vertex connectivity
+    cells = mesh.coordinates.function_space().cell_node_list
+
+    # Exterior facets
+    facets = mesh.exterior_facets
+
+    # Cell containing each boundary facet
+    cell_ids = facets.facet_cell[:, 0]
+
+    # Local facet number within that cell
+    local_facet = facets.local_facet_dat.data_ro
+
+    cell_facets = mesh.cell_to_facets.data_ro
+    markers = cell_facets[cell_ids, local_facet, 1]
+
+    # For triangles, local facet i is opposite vertex i
+    edge_vertices = np.array([
+        np.delete(cells[c], lf)
+        for c, lf in zip(cell_ids, local_facet)
+    ])
+
+    # Coordinates of the two endpoints of every boundary edge
+    edge_coords = coords[edge_vertices]
+
+    # Select your outflow boundary (Gmsh physical group 1)
+    outflow = markers == 1
+
+    outflow_edge_coords = edge_coords[outflow]
+
+    coords_smesh = smesh.coordinates.dat.data_ro
+    x_smesh = coords_smesh[:,0]
+    y_smesh = coords_smesh[:,1]
+    i_coords = []
+    for (p0, p1) in outflow_edge_coords:
+        xx0, yy0 = p0
+        xx1, yy1 = p1
+        i_coords.append(np.argmin(np.sqrt((xx0-x_smesh)**2+(yy0-y_smesh)**2)))
+        i_coords.append(np.argmin(np.sqrt((xx1-x_smesh)**2+(yy1-y_smesh)**2)))
+
+    cells_smesh = smesh.coordinates.function_space().cell_node_list
+    boundary_nodes = np.array(i_coords)
+
+    connected_edges = np.where(
+        np.isin(cells_smesh[:, 0], boundary_nodes) |
+        np.isin(cells_smesh[:, 1], boundary_nodes)
+    )[0]
+
+    return connected_edges
+
+
+def prepare_location_inputs(xc, yc):
+    if np.isscalar(xc):
+        return [[xc]], [[yc]]
+    return xc, yc
+
+def get_model_timeseries_for_locations(mesh_, run_index, xstart, xend, xc, yc, start_year=2014):
+    timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
+    us_raw, _, _, _, _, _, n_idx, _ = load_model_output(timeseries_path)
+
+    dates_model, i_model = get_model_dates(n_idx, xstart, xend, start_year=start_year)
+
+    xc_input, yc_input = prepare_location_inputs(xc, yc)
+    U_model = load_model_timeseries(mesh_, us_raw, xc_input, yc_input, i_model)[:, 0]
+    return dates_model, U_model
+
+def get_mean_winter_speedup(mesh_, run_index, xstart, xend, xc, yc, start_year=2014):
+    dates_model, U_model = get_model_timeseries_for_locations(
+        mesh_, run_index, xstart, xend, xc, yc, start_year=start_year
+    )
+    dates_model_pd = pd.to_datetime(dates_model)
+    df_monthly = pd.DataFrame(U_model, index=dates_model_pd)
+    monthly_means = df_monthly.resample("MS").mean()
+    return monthly_means.diff().median()

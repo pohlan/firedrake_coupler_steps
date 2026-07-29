@@ -17,7 +17,7 @@ def get_catchments_russel(mesh):
     S.dat.data[:] = r_surf.interp_points((mesh_xs.dat.data_ro, mesh_ys.dat.data_ro), as_array=True)
 
     catchments = gpd.read_file("Greenland_data/Yang_Smith_2016/ds01/catchments_LC80070132013231LGN00_B8.shp").geometry
-    # additional_catchments = gpd.read_file("Greenland_data/Yang_Smith_2016/additional_catchments.gpkg").geometry  # manually outlined, where there were moulins/rivers but no catchment
+    additional_catchments = gpd.read_file("Greenland_data/Yang_Smith_2016/additional_catchments.gpkg").geometry  # manually outlined, where there were moulins/rivers but no catchment
     moulins_gdf = gpd.read_file("Greenland_data/Yang_Smith_2016/ds01/moulins_LC80070132013231LGN00_B8.shp").geometry
     moulins = moulins_gdf.geometry
     lakes = gpd.read_file("Greenland_data/Yang_Smith_2016/ds01/lakes_LC80070132013231LGN00_B8.shp").geometry

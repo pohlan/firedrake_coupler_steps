@@ -3,11 +3,11 @@
 
 target_directory='parameter_runs/'
 
-run_index=201
+run_index=601
 
-for k_s_i in {0.0001,0.0005}  #{0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01}
+for k_s_i in {0.00005,0.0001}  #{0.00005,0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01}
 do
-  for m_basal_i in {0.003,0.01,0.02,0.03,0.04}
+  for m_basal_i in {0.001,0.02,0.05}
   do
     echo "k_s = $k_s_i, m_basal=$m_basal_i, run_index=$run_index"
     # make a new directory
@@ -25,7 +25,7 @@ do
     p=1.2
     q=1.0
     transition=false
-    alpha_s=1.5
+    alpha_s=1.25
     beta_s=1.5
     omega=0.001
     As_factor=5
@@ -33,7 +33,7 @@ do
     melt_input='MAR'
     m_basal=$m_basal_i
     moulins=false
-    t_end=2.5
+    t_end=10
 
     # record parameters in a txt file
     cat > "$new_dir/parameters.txt" <<EOF

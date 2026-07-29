@@ -43,13 +43,23 @@ def idx_to_month(idx, dt=2):
 def idx_to_letter(i):
     return chr(ord('a') + i)
 
+def remove_axes(ax):
+    ax.set_aspect('equal')
+    ax.set_xlim(-2.4e5,-0.2e5)
+    ax.set_ylim(-2.585e6,-2.47e6)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
 def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_legend=False):
     if not (ylims is None):
         ymin, ymax = ylims
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
-    ax.vlines([datetime(2018,1,1), datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
+    ax.vlines([datetime(2018,1,1), datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1]))
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=7))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
@@ -82,13 +92,14 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
     df_model = pd.DataFrame(Umodel, index=dates)
 
     model_resampled = df_model.resample('10D').mean()
-    model_centered = model_resampled.values - model_resampled.values.mean()
+    model_centered = model_resampled.values - model_resampled.values[model_resampled.values < 300].mean()
+    model_centered[model_centered > 150] = np.nan
     ax1.plot(model_resampled.index, model_centered, label=model_label, color=color, ls="solid", lw=lw)
     # ax1.plot(dates_model[1:], Umod_time[1:], label=model_label, color=color, ls="solid", lw=lw)
 
     # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    format_ax(ax1, xstart, xend, ig, ylims=(-80,150), ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
+    format_ax(ax1, xstart, xend, ig, ylims=(-80,160), ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
     # format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
 
     # melt input, also only plot once the first time

@@ -25,9 +25,8 @@ x, y = df.SpatialCoordinate(mesh)
 # get observations
 # for now: snapshot:
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
-# vel_file = "GL_vel_mosaic_Monthly_01Jan19_31Jan19_vv_v05.0.tif"
+# vel_file = "GL_vel_mosaic_Monthly_01Jan21_31Jan21_vv_v05.0.tif"
 vel_file = "GL_vel_mosaic_Monthly_01Nov18_30Nov18_vv_v05.0.tif"
-# vel_file = "GL_vel_mosaic_Monthly_01Jul21_31Jul21_vv_v05.0.tif"
 vel_dates, Us_obs, Us_mask = load_obs_FunctionSpace(vel_dir, [vel_file], mesh)
 print(vel_dates)
 Us_obs = Us_obs[0]
@@ -57,9 +56,9 @@ Nhat   = df.Constant(917*9.81*H_mean)
 
 # get N from model output
 run_index = 311
-idx       = int(365/2*4.9)   # 4.87 = November 15, 2018
+idx       = int(365/2*8.041)   # 4.87 = November 15, 2018; 8.041: January 2022 (new1)
 model_file = f"parameter_runs/run_{run_index}/time_series.h5"
-_, _, phi_raw, _, _, n_idx, N_raw = load_model_output(model_file)
+_, _, phi_raw, _, _, _, n_idx, N_raw = load_model_output(model_file)
 N = df.Function(coupler.Q_cg)
 N.dat.data[:] = N_raw[:, idx]
 # phi = df.Function(coupler.Q_cg)
@@ -110,7 +109,7 @@ try:
 except df.ConvergenceError:
     J = 1e20
 
-alpha = 10**(-2)   # tune this
+alpha = 10**(-2.0)   # tune this
 J_reg = alpha * df.inner(df.grad(m), df.grad(m))*df.dx
 
 # print("Initial J_misfit:", df.assemble(J_reg))

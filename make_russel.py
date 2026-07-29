@@ -11,6 +11,8 @@ geometry = gmsh.model.geo
 data_dir = "/home/annegret/Projects/coupled_modeling/firedrake_coupler_steps/Greenland_data/russel/"
 
 gdf = gpd.read_file("Greenland_data/russel/russel_domain.gpkg")
+# gdf = gpd.read_file("Greenland_data/russel/domain_smaller.gpkg")
+# gdf = gpd.read_file("Greenland_data/russel/domain_Mankoff_k09_5glaciers.gpkg")
 geom = gdf.geometry[0] #.geoms[0]
 coords_outer = geom.exterior.coords[:-1]  # last point is double, remove it
 # if there is an actual hole in the polygon

@@ -220,7 +220,7 @@ def melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler):
     melt = np.zeros((len(H.dat.data[:]), n_months))
     for (i_file,f) in enumerate(sorted_files):
         r = get_MAR_Raster_with_transform(melt_dir+f)
-        r.crop([-2.4e5, -2.585e6, 0.0, -2.47e6], inplace=True)
+        r.crop([-2.4e5, -2.62e6, 0.0, -2.47e6], inplace=True)
         for m_of_year in range(12):
             n = i_file*12 + m_of_year
             melt[:,n] = r.interp_points((meshx, meshy), band=m_of_year, as_array=True) / coupler.rho_w * 12

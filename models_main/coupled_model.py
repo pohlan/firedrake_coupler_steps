@@ -188,8 +188,8 @@ class SpecFO(object):
         vi = VerticalIntegrator(points,weights)
 
         # Budd sliding law
-        tau_bx = -beta2*(Min(Max(N,1e4),rho_i*g*H)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
-        tau_by = -beta2*(Min(Max(N,1e4),rho_i*g*H)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
+        tau_bx = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*u(1)/Uhat  # does not converge without the Max(N,...)
+        tau_by = -beta2*(Max(N,1e4)/Nhat)**p*abs((u(1)**2 + v(1)**2)/Uhat**2 + 1e-2)**((q-1)/2.)*v(1)/Uhat  # does not converge without the Max(N,...)
         # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
 
         # Coulomb, Hewitt 2013 / Schoof 2005
