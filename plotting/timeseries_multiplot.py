@@ -1,5 +1,6 @@
 import os
 import sys
+import glob
 # Add parent directory to path so imports work regardless of where script is run from
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from plotting.loading_functions import *
@@ -13,18 +14,18 @@ vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/month
 
 # profile width, which runs and glaciers to plot
 profile_width = 4.5e3
-glacier_ids = [1,1,4,4]
+glacier_ids = [1,1,4,5]
 n_glaciers = len(glacier_ids)
-ds_upglacier = [10e3,30e3,15e3,23e3]
+ds_upglacier = [10e3,35e3,16e3,9e3]
 deltas_upglacier = [500,500,500,500]
-glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Isorlersuup", "Isorlersuup"]
+glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Isorlersuup", "Glacier 5"]
 # glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Russel"]
-run_indices = [311,420]
+run_indices = [327,477]
 model_start_years = [2014,2014] # ToDo: automate this
 model_labels = ["baseline", "reduced \nsheet flow"]
 
 # time period to plot
-xstart,xend = datetime(2017,1,2),datetime(2022,12,30)
+xstart,xend = datetime(2019,1,2),datetime(2023,12,30)
 
 # load glacier flowline coordinates and distances along profile
 x_points = []
@@ -42,9 +43,9 @@ mesh_, smesh_ = get_meshes(timeseries_path)
 B, H, S = load_topography(mesh_)
 
 # get velocity observation files sorted after date
-files   = os.listdir(vel_dir)
+files   = glob.glob(vel_dir+"*vv*.tif")
 obs_dates, obs_files = get_obs_files(files, xrange=(xstart,xend))
-Uobs_glaciers = load_obs_timeseries(vel_dir, obs_files, x_points, y_points)
+Uobs_glaciers = load_obs_timeseries(obs_files, x_points, y_points)
 
 # plotting parameters
 colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
@@ -55,17 +56,18 @@ annotate_fs = 18
 
 # prepare figure, gridspecs
 fig = plt.figure(figsize=(len(glacier_ids)*7,13))
-gs = fig.add_gridspec(5, len(glacier_ids)+2, left=0.1, right=0.95, top=0.95, bottom=0.1, hspace=0.0, wspace=0.1, width_ratios=[6, 6, 0.2, 6, 6, 1], height_ratios=[2,2,10,10,10])
-axes = np.array([[fig.add_subplot(gs[j, i]) for i in [0,1,3,4]] for j in range(2,5)])
+gs = fig.add_gridspec(5, len(glacier_ids)+3, left=0.1, right=0.95, top=0.95, bottom=0.1, hspace=0.0, wspace=0.1, width_ratios=[6, 6, 0.2, 6, 0.2, 6, 1], height_ratios=[2,2,10,10,10])
+axes = np.array([[fig.add_subplot(gs[j, i]) for i in [0,1,3,5]] for j in range(2,5)])
 
 # set title for the two glaciers, group the columns
-for (i,glacier_name) in enumerate([glacier_names[0],glacier_names[2]]):
-    i0 = i*3
-    topax = fig.add_subplot(gs[0, i0:i0+2])
+i0=0
+for (i,(glacier_name,l_title)) in enumerate(zip([glacier_names[0],glacier_names[2],glacier_names[3]],[2,1,1])):
+    topax = fig.add_subplot(gs[0, i0:i0+l_title])
     topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
     topax.set_xlim(0,1)
     topax.axis("off")
     topax.annotate(glacier_name, xy=[0.5,0.5], fontsize=annotate_fs*1.3, fontweight="bold", ha="center", va="center")
+    i0 += l_title+1
 
 for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_labels, model_start_years):
     timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
@@ -105,18 +107,18 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         df_PwPi = pd.DataFrame(Pw_Pi, index=dates_model_pd)
         Pw_Pi_resampled = df_PwPi.resample('10D').mean()
         ax2.plot(Pw_Pi_resampled.index, Pw_Pi_resampled.values, label=model_label, lw=lw, color=color)
-        format_ax(ax2, xstart, xend, ig, panel_idx=4+ig, ylims=(-0.41,1.1), ylabel=r"$p_w / p_i$" if ig == 0 else "")
+        format_ax(ax2, xstart, xend, ig, panel_idx=4+ig, ylims=(-0.35,1.1), ylabel=r"$p_w / p_i$" if ig == 0 else "")
         ax2.set_xlabel("")
         ax2.set_xticks([])
         # legend outside of plots, in separate axis
         if (run_index == run_indices[-1]) & (ig==n_glaciers-1):
-            lax = fig.add_subplot(gs[3, 5])
+            lax = fig.add_subplot(gs[3, 6])
             lines = ax1.get_lines()  # ax1 so that observations are in there too
             labels = [h.get_label() for h in lines]
             lax.legend(handles=lines, labels=labels, loc=(-0.05,0.2), frameon=False)
             lax.axis("off")
         if (run_index == run_indices[-1]) & (ig==0):
-            ax2.annotate("January", xy=[datetime(2020,2,1),-0.31], rotation=90)
+            ax2.annotate("January", xy=[datetime(2020,2,1),-0.3], rotation=90)
 
         # plot discharges q and Q
         ax3 = axes[2, ig]
@@ -138,9 +140,9 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         ymin = min(np.min(q),np.min(Q))
         ymax = max(np.max(q),np.max(Q))
         ax3.set_yscale("log")
-        format_ax(ax3, xstart, xend, ig, panel_idx=2*4+ig, ylims=(5e-7,300), ylabel=r"Discharge ($\mathrm{m^3\,s^{-1}}$)" if ig == 0 else "", draw_legend=False)
+        format_ax(ax3, xstart, xend, ig, panel_idx=2*4+ig, ylims=(5e-7,1000), ylabel=r"Discharge ($\mathrm{m^3\,s^{-1}}$)" if ig == 0 else "", draw_legend=False)
         if (run_index == run_indices[-1]) & (ig==n_glaciers-1):
-            lax = fig.add_subplot(gs[4, 5])
+            lax = fig.add_subplot(gs[4, 6])
             lax.plot([], [], color='grey', linestyle="-.", label="Q (channels)")
             lax.plot([], [], color='grey', linestyle="solid", label="q (sheets)")
             lax.legend(loc=(-0.05,0.4), title="Discharge", frameon=False)
@@ -155,4 +157,4 @@ for ax in axes[0,:]:
 
 plt.tight_layout(pad=0.4)
 plt.savefig(f"plotting/output/timeseries_run{run_indices[0]}_{run_indices[1]}_d{int(ds_upglacier[0]*1e-3)}_{int(ds_upglacier[1]*1e-3)}.jpg", dpi=150, bbox_inches='tight')
-# plt.savefig(f"plotting/main_figures/f03.jpg")
+plt.savefig(f"plotting/main_figures/f02.jpg")

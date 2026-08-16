@@ -30,6 +30,7 @@ def load_model_output(timeseries_path):
         N_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/N/N'][()].T
         q_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_2/vecs/q/q'][()].T
         Q_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/Q/Q'][()].T
+        # S_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/S/S'][()].T
         n_idx = us_raw.shape[1]
     return us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, N_raw
 
@@ -97,11 +98,11 @@ def interpolate_meshfct_to_profile(F, xc, yc):
     vals  = F(points)
     return vals
 
-def load_obs_timeseries(vel_dir, sorted_files, xc, yc):
+def load_obs_timeseries(sorted_files, xc, yc):
     n_obs = len(sorted_files)
     U_obs = np.zeros((n_obs, len(xc)))
     for (i_time,f) in enumerate(sorted_files):
-        r = get_raster(vel_dir+f)
+        r = get_raster(f)
         for (i_point,(xx,yy)) in enumerate(zip(xc,yc)):
             U_obs[i_time,i_point] = np.mean(r.interp_points((xx, yy), as_array=True))
     return U_obs
@@ -328,11 +329,9 @@ def get_model_timeseries_for_locations(mesh_, run_index, xstart, xend, xc, yc, s
     U_model = load_model_timeseries(mesh_, us_raw, xc_input, yc_input, i_model)[:, 0]
     return dates_model, U_model
 
-def get_mean_winter_speedup(mesh_, run_index, xstart, xend, xc, yc, start_year=2014):
-    dates_model, U_model = get_model_timeseries_for_locations(
-        mesh_, run_index, xstart, xend, xc, yc, start_year=start_year
-    )
+def get_monthly_means_model(mesh_, run_index, xstart, xend, xc, yc, start_year=2014):
+    dates_model, U_model = get_model_timeseries_for_locations(mesh_, run_index, xstart, xend, xc, yc, start_year=start_year)
     dates_model_pd = pd.to_datetime(dates_model)
     df_monthly = pd.DataFrame(U_model, index=dates_model_pd)
     monthly_means = df_monthly.resample("MS").mean()
-    return monthly_means.diff().median()
+    return monthly_means.to_numpy().ravel()

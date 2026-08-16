@@ -55,8 +55,8 @@ Uhat   = df.Constant(50)
 Nhat   = df.Constant(917*9.81*H_mean)
 
 # get N from model output
-run_index = 311
-idx       = int(365/2*8.041)   # 4.87 = November 15, 2018; 8.041: January 2022 (new1)
+run_index = args.run_index
+idx       = int(365/2*4.9)   # 4.87 = November 15, 2018; 8.041: January 2022 (new1)
 model_file = f"parameter_runs/run_{run_index}/time_series.h5"
 _, _, phi_raw, _, _, _, n_idx, N_raw = load_model_output(model_file)
 N = df.Function(coupler.Q_cg)
@@ -109,7 +109,7 @@ try:
 except df.ConvergenceError:
     J = 1e20
 
-alpha = 10**(-2.0)   # tune this
+alpha = 10**(-2)   # tune this
 J_reg = alpha * df.inner(df.grad(m), df.grad(m))*df.dx
 
 # print("Initial J_misfit:", df.assemble(J_reg))
@@ -118,8 +118,8 @@ J = df.assemble(J_misfit + J_reg)
 Jhat    = ReducedFunctional(J, Control(m))
 result = minimize(Jhat, method="L-BFGS-B", bounds=(1e5, 6e6)) #, options={"maxiter": 100})
 
-df.VTKFile(results_dir+f"beta2_opt_1e{round(np.log10(alpha),ndigits=1)}_run{run_index}_new.pvd").write(result)
-with df.CheckpointFile(f"{results_dir}/beta2_opt_1e{round(np.log10(alpha),ndigits=1)}_run{run_index}_new.h5", 'w') as afile:
+df.VTKFile(results_dir+f"beta2_opt_1e{round(np.log10(alpha),ndigits=1)}_run{run_index}.pvd").write(result)
+with df.CheckpointFile(f"{results_dir}/beta2_opt_1e{round(np.log10(alpha),ndigits=1)}_run{run_index}.h5", 'w') as afile:
     afile.save_mesh(mesh)
     afile.save_function(result, name="beta2")
 

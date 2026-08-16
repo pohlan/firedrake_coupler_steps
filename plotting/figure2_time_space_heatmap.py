@@ -1,5 +1,6 @@
 import os
 import sys
+import glob
 # Add parent directory to path so imports work regardless of where script is run from
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from plotting.loading_functions import *
@@ -11,7 +12,7 @@ from datetime import datetime, timedelta
 import cmcrameri.cm as cmc
 
 # which glaciers and runs to plot
-run_index1, run_index2 = 312, 445
+run_index1, run_index2 = 327, 477
 model_start_yrs        = [2014, 2014]
 model_labels  = ["Baseline", "Reduced \nsheet flow"]
 glacier_ids = [1,2,3,4,5]
@@ -33,7 +34,7 @@ ds_upglacier = np.arange(start=delta/2, stop=profile_stop,step=delta)
 year = 2021
 xstart,xend = datetime(year,1,2), datetime(year,12,31)
 
-ds_vline = [np.array([10e3,35e3]),[],[],np.array([15e3,23e3]),[]]
+ds_vline = [np.array([10e3,35e3]),[],[],np.array([16e3,]),np.array([9e3,])]
 
 # plotting parameters
 color_map = cmc.managua
@@ -280,7 +281,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     ax3 = fig.add_subplot(gs[4, ig])
 
     # load velocity observations
-    files   = os.listdir(vel_dir)
+    files   = glob.glob(vel_dir+"*vv*.tif")
     obs_dates, obs_files = get_obs_files(files, xrange=(xstart,xend))
 
     # organize into matrix
@@ -289,7 +290,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         # idx_profiles = np.where(abs(dists - d)<delta/2)
         # obs_matrix[i_space,:] = np.mean(
 
-    obs_matrix = load_obs_timeseries(vel_dir, obs_files, xc_prof, yc_prof)
+    obs_matrix = load_obs_timeseries(obs_files, xc_prof, yc_prof)
 
     # plot
     im = ax3.pcolormesh(ds_upglacier*1e-3, obs_dates, obs_matrix, cmap=color_map)
@@ -357,4 +358,4 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
 
 
 plt.savefig(f"plotting/output_heatmap/hovmuller_runs_{run_index1}_{run_index2}_{year}.jpg")
-# plt.savefig(f"plotting/main_figures/f02.jpg")
+plt.savefig(f"plotting/main_figures/f01.jpg")

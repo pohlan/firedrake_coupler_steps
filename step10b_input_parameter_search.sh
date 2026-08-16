@@ -28,12 +28,13 @@ do
     alpha_s=1.25
     beta_s=1.5
     omega=0.001
-    As_factor=5
+    As_factor=6
     sig_topo=5
     melt_input='MAR'
     m_basal=$m_basal_i
     moulins=false
     t_end=10
+    beta2_inversion=true
 
     # record parameters in a txt file
     cat > "$new_dir/parameters.txt" <<EOF
@@ -67,6 +68,7 @@ EOF
     if [ "$moulins" = true ]; then
       options="$options --moulins"
     fi
+    options="$options --beta2_inversion"
     nohup python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt &
 
     # increase run_index by 1

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import matplotlib.dates as mdates
 import geoutils as gu
 import pandas as pd
+from scipy.optimize import curve_fit
 
 def get_variable(X, mesh_, s, s0s, mask=None):
     # get function space
@@ -59,7 +60,7 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
-    ax.vlines([datetime(2018,1,1), datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
+    ax.vlines([datetime(2018,1,1), datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1), datetime(2024,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1]))
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=7))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
@@ -99,7 +100,7 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
 
     # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    format_ax(ax1, xstart, xend, ig, ylims=(-80,160), ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
+    format_ax(ax1, xstart, xend, ig, panel_idx=ig, ylims=(-80,160), ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
     # format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
 
     # melt input, also only plot once the first time
@@ -115,6 +116,7 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
         for spine in ax2.spines.values():
             spine.set_visible(False)            # no box
         ax2.fill_between(dates_model, m_time, color="grey", alpha=0.3)
+        ax2.set_ylim(0, 19)
         ax2.tick_params(axis='y', labelright=False, colors="grey", length=7, width=2)
         if (ig==n_glaciers-1):
             ax2.set_ylabel(r"Runoff ($\mathrm{m^3\,a^{-1}}$)")
@@ -122,3 +124,27 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
             ax2.tick_params(axis='y', labelright=True, colors="grey", length=7, width=2)
 
     return
+
+def fit_linear_slope(U, sig=None):
+    # print("do curve fit...")
+    def linear(t, intercept, slope):
+            return intercept + slope * t
+    t = range(len(U))
+    if sig is None:
+        popt, pcov = curve_fit(linear, t, U)
+        intercept, slope = popt
+        return slope
+    else:
+        popt, pcov = curve_fit(linear, t, U, sigma=sig, absolute_sigma=True)
+        intercept, slope = popt
+        slope_err = np.sqrt(pcov[1, 1])
+        return slope, slope_err
+
+def panel_letter_annotation(ax, ii, annotate_fs, xyc=(0.03, 1.0)):
+    ax.annotate(
+                f"{idx_to_letter(ii)}",
+                xy=xyc,
+                xycoords="axes fraction",
+                fontsize=annotate_fs * 0.9,
+                fontweight="bold",
+            )

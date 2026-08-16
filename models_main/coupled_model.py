@@ -337,7 +337,7 @@ class GLADS(object):
         phi = self.phi
         N   = self.N
         h   = self.coupler.U[1]
-        S   = self.coupler.U[2]
+        S = self.S = self.coupler.U[2]
 
         # test functions
         xsi = self.coupler.Lambda[0]

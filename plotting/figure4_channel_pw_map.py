@@ -13,9 +13,9 @@ from firedrake.pyplot import tripcolor
 import cmcrameri.cm as cmc
 import matplotlib.colors as colors
 
-run_indices = [323,455]
+run_indices = [327,477]
 model_labels  = ["Baseline", "Reduced \nsheet flow"]
-Q_min     = 15
+Q_min     = 10
 # vmax = 5e10
 
 flowlines_path = "Greenland_data/russel/flowlines.gpkg"
@@ -23,8 +23,8 @@ outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 vel_dir = "Greenland_data/velocity/monthly/"
 
 # plotting parameters
-plt.rcParams['font.size'] = 32
-annotate_fs = 32
+plt.rcParams['font.size'] = 28
+annotate_fs = 28
 
 # load model input independent of run
 timeseries_path = f"parameter_runs/run_{run_indices[0]}/time_series.h5"
@@ -84,8 +84,8 @@ for (i_r,run_index) in enumerate(run_indices):
     # load model output
     timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
     us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
-    for (i_s,season) in enumerate(["Winter","Summer"]):
-        idx = {'Winter': int(6.05*365/2), 'Summer': int(6.53*365/2)}[season]
+    for (i_s,season) in enumerate(["January 2021","July 2021"]):
+        idx = {'January 2021': int(7.05*365/2), 'July 2021': int(7.53*365/2)}[season]
         ax = fig.add_subplot(gs[i_r,i_s])
 
         # extract q for the specified timestep
@@ -148,5 +148,5 @@ for (i_r,run_index) in enumerate(run_indices):
 # plt.scatter(marker_x, marker_y, 210, c=colors, edgecolors="black", linewidths=1)
 
 plt.tight_layout()
-plt.savefig("plotting/main_figures/f04.jpg")
+plt.savefig("plotting/main_figures/f03.jpg")
 plt.savefig(f"plotting/output_heatmap/Q_map_{run_indices[0]}_{run_indices[1]}_q.png", dpi=150)

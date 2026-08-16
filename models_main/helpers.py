@@ -29,6 +29,7 @@ def get_args():
     parser.add_argument('--l_c', type=float, default=10, help='sheet width below channel')
     parser.add_argument('--e_v', type=float, default=1e-4, help='englacial void ratio')
     parser.add_argument('--beta2', type=float, default=1e6, help='basal traction')
+    parser.add_argument('--beta2_inversion', action='store_true', help='whether or not to invert for beta2 and run again')
     parser.add_argument('--p', type=float, default=1, help='pressure exponent')
     parser.add_argument('--q', type=float, default=1, help='sliding exponent')
     parser.add_argument('--data_directory', default='Greenland_data/')
