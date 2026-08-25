@@ -129,6 +129,8 @@ dt0= 2*hour
 
 if args.beta2_inversion:
     # get beta2 from inversion
+    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run477.h5"
+    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run304.h5"
     chk_file = f"test_inversion/beta2_opt_1e-2.0_run{args.run_index}.h5"
     with CheckpointFile(chk_file, 'r') as afile:
             mesh_ = afile.load_mesh()
@@ -137,6 +139,14 @@ if args.beta2_inversion:
     stokes.build_forms(beta2=beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat) # beta2 from inversion
 else:
     stokes.build_forms(beta2=args.beta2, q=args.q, p=args.p, Nhat=Nhat, Uhat=Uhat)  # all constant
+
+# spatially varying h_r
+# x, y = df.SpatialCoordinate(mesh)
+# h_r = df.Function(hydro.V_h).interpolate(1.0 + (7.0 / 60852.0) * (x + 205482.0))
+# h_r.interpolate(df.max_value(df.min_value(h_r, 8.0), 1.0))
+# df.VTKFile(results_dir+"h_r.pvd").write(h_r)
+
+# hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
 # initial melt input to moulins

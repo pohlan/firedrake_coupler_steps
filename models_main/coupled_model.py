@@ -195,21 +195,21 @@ class SpecFO(object):
         # Coulomb, Hewitt 2013 / Schoof 2005
         #### mu_b = df.Constant(0.1)
         #### lambda_b = df.Constant(1.0)
-        #### eps_u = df.Constant(1e-8)
+        #### eps_u = df.Constant(1e-4)
         #### eps_N = df.Constant(1e4)
-        #### u_b = self.u_b = df.sqrt(u(1)**2 + v(1)**2 + eps_u)
+        #### u_b = self.u_b = df.sqrt(u(1)**2 + v(1)**2 + eps_u**2)
         #### N_eff = df.sqrt(self.coupler.hydro.N**2 + eps_N**2)
-        #### f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b)+eps_u)**(1/n)
-        #### tau_bx = f * u(1)/(u_b+eps_u)
-        #### tau_by = f * v(1)/(u_b+eps_u)
+        #### f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b))**(1/n)
+        #### tau_bx = f * u(1)/u_b
+        #### tau_by = f * v(1)/u_b
 
         # Gagliardini with alpha=1 and q=1
-        # As = df.Constant(1.66e-24)
-        # C  = df.Constant(0.16)
-        #### Xsi    = u_b / (C**n*Max(N,1e5)**n*As)
+        #### C  = df.Constant(0.16)
+        #### As = df.Constant(C*(lambda_b*A)**-1/n)
+        #### Xsi    = u_b / (C**n*N_eff**n*As)
         #### f      = As**(-1/n) * (1/(1+Xsi))**(1/n)
-        #### tau_bx = -f * (u_b+1e-5)**(1/n-1) * u(1)
-        #### tau_by = -f * (u_b+1e-5)**(1/n-1) * v(1)
+        #### tau_bx = f * (u_b)**(1/n-1) * u(1)
+        #### tau_by = f * (u_b)**(1/n-1) * v(1)
 
         # u_b_1n_1 = abs((u(1)**2 + v(1)**2) + eps_u)**((1/n-1)/2.)
         ## f = C*Max(N,1e4)*u_b**(1/n-1) / (u_b+C**n*As*Max(N,1e4)**n)**1/n

@@ -3,13 +3,13 @@
 
 target_directory='parameter_runs/'
 
-run_index=601
+run_index=665
 
-for k_s_i in {0.00005,0.0001}  #{0.00005,0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01}
+for h_r_i in {10.0,12.0}  # {0.5,1.0,1.8,2.0,3.0,4.0,6.0,8.0,10.0,12.0}
 do
-  for m_basal_i in {0.001,0.02,0.05,0.1}
+  for m_basal_i in {0.001,0.02,0.05,0.1} # {0.001,0.02,0.05,0.1}
   do
-    echo "k_s = $k_s_i, m_basal=$m_basal_i, run_index=$run_index"
+    echo "h_r = $h_r_i, run_index=$run_index"
     # make a new directory
     new_dir=$target_directory'run_'$run_index/
     mkdir -p $new_dir
@@ -17,15 +17,15 @@ do
     # parameters
     e_v=0.0001
     l_r=5
-    h_r=1.0
-    k_s=$k_s_i
+    h_r=$h_r_i
+    k_s=0.0004
     k_c=0.1
     l_c=10
     beta2=3.7e5
     p=1.2
     q=1.0
     transition=false
-    alpha_s=1.25
+    alpha_s=1.5
     beta_s=1.5
     omega=0.001
     As_factor=6

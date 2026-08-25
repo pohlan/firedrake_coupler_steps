@@ -13,7 +13,7 @@ from firedrake.pyplot import tripcolor
 import cmcrameri.cm as cmc
 import matplotlib.colors as colors
 
-run_indices = [327,477]
+run_indices = [314,478]
 model_labels  = ["Baseline", "Reduced \nsheet flow"]
 Q_min     = 10
 # vmax = 5e10
@@ -83,9 +83,9 @@ gs = fig.add_gridspec(2, 3, left=0.12, right=0.93, top=0.92, bottom=0, hspace=0.
 for (i_r,run_index) in enumerate(run_indices):
     # load model output
     timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
-    us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
-    for (i_s,season) in enumerate(["January 2021","July 2021"]):
-        idx = {'January 2021': int(7.05*365/2), 'July 2021': int(7.53*365/2)}[season]
+    us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, _, n_idx, _ = load_model_output(timeseries_path)
+    for (i_s,season) in enumerate(["July 2020", "January 2021"]):
+        idx = {'January 2021': int(7.05*365/2), 'July 2020': int(6.53*365/2)}[season]
         ax = fig.add_subplot(gs[i_r,i_s])
 
         # extract q for the specified timestep

@@ -26,11 +26,25 @@ x, y = df.SpatialCoordinate(mesh)
 # for now: snapshot:
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
 # vel_file = "GL_vel_mosaic_Monthly_01Jan21_31Jan21_vv_v05.0.tif"
-vel_file = "GL_vel_mosaic_Monthly_01Nov18_30Nov18_vv_v05.0.tif"
-vel_dates, Us_obs, Us_mask = load_obs_FunctionSpace(vel_dir, [vel_file], mesh)
+vel_file = vel_dir+"GL_vel_mosaic_Monthly_01Nov18_30Nov18_vv_v05.0.tif"
+vel_dates, Us_obs, Us_mask = load_obs_FunctionSpace([vel_file], mesh)
 print(vel_dates)
 Us_obs = Us_obs[0]
 Us_mask = Us_mask[0]
+
+# # observational uncertainties
+# ex_files, ey_files, vx_files, vy_files = get_obs_error_files(datetime(2018, 11, 1), datetime(2018, 11, 30), vel_dir)
+
+# _, e_x, _ = load_obs_FunctionSpace(ex_files, mesh)
+# _, e_y, _ = load_obs_FunctionSpace(ey_files, mesh)
+# _, v_x, _ = load_obs_FunctionSpace(vx_files, mesh)
+# _, v_y, _ = load_obs_FunctionSpace(vy_files, mesh)
+
+# DG0 = df.FunctionSpace(mesh, "DG", 0)
+# sigma = df.Function(DG0)
+# sigma.dat.data[:] = obs_sigma(v_x[0].dat.data_ro, v_y[0].dat.data_ro, e_x[0].dat.data_ro, e_y[0].dat.data_ro)
+# df.VTKFile(results_dir+"sigma.pvd").write(sigma)
+
 
 # initiate classes
 stokes  = SpecFO(mesh, results_dir)
@@ -58,7 +72,7 @@ Nhat   = df.Constant(917*9.81*H_mean)
 run_index = args.run_index
 idx       = int(365/2*4.9)   # 4.87 = November 15, 2018; 8.041: January 2022 (new1)
 model_file = f"parameter_runs/run_{run_index}/time_series.h5"
-_, _, phi_raw, _, _, _, n_idx, N_raw = load_model_output(model_file)
+_, _, phi_raw, _, _, _, _, n_idx, N_raw = load_model_output(model_file)
 N = df.Function(coupler.Q_cg)
 N.dat.data[:] = N_raw[:, idx]
 # phi = df.Function(coupler.Q_cg)
@@ -105,6 +119,7 @@ try:
     Us_model = df.sqrt(coupler.stokes.u(0)**2+coupler.stokes.v(0)**2)
     # df.VTKFile(results_dir+"Us_model.pvd").write(df.project(Us_model,coupler.Q_cg))
     diff = Us_mask*(Us_model - Us_obs)
+    # diff = Us_mask*((Us_model - Us_obs)/sigma)
     J_misfit = df.inner(diff,diff)*df.dx
 except df.ConvergenceError:
     J = 1e20

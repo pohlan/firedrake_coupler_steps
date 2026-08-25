@@ -10,9 +10,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import cmcrameri.cm as cmc
+from firedrake.pyplot import tripcolor
+from matplotlib.colors import LogNorm
 
 # which glaciers and runs to plot
-run_index1, run_index2 = 327, 477
+run_index1, run_index2 = 314, 478
 model_start_yrs        = [2014, 2014]
 model_labels  = ["Baseline", "Reduced \nsheet flow"]
 glacier_ids = [1,2,3,4,5]
@@ -32,7 +34,8 @@ ds_upglacier = np.arange(start=delta/2, stop=profile_stop,step=delta)
 
 # time period
 year = 2021
-xstart,xend = datetime(year,1,2), datetime(year,12,31)
+xstart,xend = datetime(year-1,4,2), datetime(year,10,30)
+xstart_y1, xend_y1 = datetime(year-1,4,2), datetime(year-1,10,30)
 
 ds_vline = [np.array([10e3,35e3]),[],[],np.array([16e3,]),np.array([9e3,])]
 
@@ -50,11 +53,11 @@ B, H, S = load_topography(mesh_)
 
 # prepare figure, gridspecs
 fig = plt.figure(figsize=(len(glacier_ids)*8,33))
-gs = fig.add_gridspec(6, len(glacier_ids)+1, left=0.11, right=0.92, top=0.95, bottom=0.08, hspace=0.15, wspace=0.1, width_ratios=[15, 15, 15, 15, 15, 1], height_ratios=[2.5, 0.2, 1, 1, 1, 0.8])
-# gs = fig.add_gridspec(5, len(glacier_ids)+1, left=0.11, right=0.92, top=0.95, bottom=0.08, hspace=0.15, wspace=0.1, width_ratios=[15, 1], height_ratios=[0.6, 1, 1, 1, 0.8])
+gs = fig.add_gridspec(6, len(glacier_ids)+1, left=0.11, right=0.92, top=0.95, bottom=0.08, hspace=0.15, wspace=0.1, width_ratios=[15, 15, 15, 15, 15, 1], height_ratios=[1.5, 0.2, 1, 1, 1, 0.8])
+gs_top = gs[0, :].subgridspec(1, 3, hspace=0.0, wspace=0.04, width_ratios=[1,0.2,1])
 
 # plot bed topography
-topax = fig.add_subplot(gs[0, 0:4])
+topax = fig.add_subplot(gs_top[0,0])
 
 def get_topo(file):
     r = gu.Raster(file)
@@ -66,9 +69,11 @@ def get_topo(file):
     return r
 r_bed = get_topo("Greenland_data/BedMachineGreenland-v5_bed_smooth_sig5.nc")
 
-data    = r_bed.data.squeeze()
-x, y    = r_bed.coords(grid=False)
-im = topax.pcolormesh(x,np.flip(y),data,cmap="terrain")
+# data    = r_bed.data.squeeze()
+# x, y    = r_bed.coords(grid=False)
+# im = topax.pcolormesh(x,np.flip(y),data,cmap="terrain")
+
+im = tripcolor(B, axes=topax, cmap="terrain")
 cbar = fig.colorbar(im, ax=topax)
 cbar.set_label("Bed elevation (m)")
 # format
@@ -86,20 +91,20 @@ gdf.plot(ax=topax, facecolor='none', edgecolor='black', linewidth=1, label='Doma
 # Scalebar & N arrow #
 ######################
 
-# scale bar
-line_x = [-2.35e5,-2.25e5]
-line_y = [-2.58e6,-2.58e6]
-topax.plot(line_x, line_y, color="black", lw=5)
-topax.annotate("10 km", [-2.4e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
-# north arrow
-topax.arrow(
-    -2.05e5, -2.58e6,
-    0, 1.2e4,
-    head_width=2500,
-    head_length=3000,
-    color='black'
-)
-topax.annotate("N", [-2.02e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
+# # scale bar
+# line_x = [-2.35e5,-2.25e5]
+# line_y = [-2.58e6,-2.58e6]
+# topax.plot(line_x, line_y, color="black", lw=5)
+# topax.annotate("10 km", [-2.4e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
+# # north arrow
+# topax.arrow(
+#     -2.05e5, -2.58e6,
+#     0, 1.2e4,
+#     head_width=2500,
+#     head_length=3000,
+#     color='black'
+# )
+# topax.annotate("N", [-2.02e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
 
 ######################
 # Surface elevation  #
@@ -114,6 +119,15 @@ cs = topax.contour(x, np.flip(y), data,
                 colors="black",
                 linewidths=0.5,
 )
+
+# data = S.dat.data_ro
+# coords = hlp.get_coordinates(mesh_, "CG", 1)
+# x, y = coords[:,0], coords[:,1]
+# cs = topax.contour(x, y, data,
+#                 levels=np.arange(0, 3000, 100),
+#                 colors="black",
+#                 linewidths=0.5,
+# )
 labels = topax.clabel(cs, fmt="%d m", fontsize=28, levels=np.arange(900, 3000, 300), rightside_up=False)
 
 ######################
@@ -124,7 +138,7 @@ gls = [1,2,3,4,5]
 ds_timeseries = [np.array([10e3,30e3]),[],[],np.array([15e3,25e3]),[]]
 colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 
-annotate_offsets = [[-1e4,1e4],[-3e4,1e3],[-4e4,-8e3],[-3.5e4,-1e4],[-2.7e4,-1e4]]
+annotate_offsets = [[-2e4,1e4],[-4.5e4,-1e3],[-6e4,-8e3],[-6e4,-0.6e4],[-5.5e4,-0.5e4]]
 
 gl_names = ["Isunnguata-Sermia","Russel","Ørkendalen","Isorlersuup","Glacier-5"]
 gl_annotations = ["Isunnguata\n Sermia","Russel","Ørkendalen","Isorlersuup","Glacier 5"]
@@ -139,16 +153,16 @@ for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_na
     marker_x = []
     marker_y = []
     d_marker = [10e3, 25e3, 40e3]
-    offsets_marker = [[-4e3,-8e3],[-5e3,-7e3],[-2e3,-8e3]]
+    offsets_marker = [[-1e4,-1e4],[-1e4,+5e3],[4e3,0e3]]
     for (d,m_offset) in zip(d_marker,offsets_marker):
         marker_x.append(xx[np.argmin(abs(dists-d))])
         marker_y.append(yy[np.argmin(abs(dists-d))])
-        if gl == 3:
-            topax.annotate(f"{int(d*1e-3)} km",[marker_x[-1]+m_offset[0],marker_y[-1]+m_offset[1]], c=col, fontsize=annotate_fs)
+        if gl == 5:
+            topax.annotate(f"{int(d*1e-3)} km",[marker_x[-1]+m_offset[0],marker_y[-1]+m_offset[1]], c=col, fontsize=annotate_fs, va="center", ha="left")
+            # topax.annotate(f"{int(d*1e-3)} km",[-2.5e5+d*3,-2.58e6], c=col, fontsize=annotate_fs)
     topax.scatter(marker_x, marker_y, 150, c=col, edgecolors='black', marker="o",zorder=3)
     topax.annotate(strng,[marker_x[0],marker_y[0]], xytext=[marker_x[0]+offset_crd[0],marker_y[0]+offset_crd[1]], c=col, fontsize=annotate_fs)
 
-fig.tight_layout()
 
 ################
 # Panel label  #
@@ -156,12 +170,67 @@ fig.tight_layout()
 topax.annotate("a", [-2.4e5,-2.47e6-1e4], xytext=[-2.4e5-2e4,-2.47e6-1e4], fontsize=annotate_fs, fontweight="bold")
 
 
+
+#########################
+# total meltwater input #
+#########################
+
+# topax2 = fig.add_subplot(gs[0, 3:6])
+topax2 = fig.add_subplot(gs_top[0,2])
+
+_, m_raw, _, _, _, _, _, n_idx, _ = load_model_output(timeseries_path)
+dates_model, i_model = get_model_dates(n_idx, xstart_y1, xend_y1)
+V     = df.FunctionSpace(mesh_, "CG", 1)
+m     = df.Function(V)
+for (i_time, i_m) in enumerate(i_model):
+    m.dat.data[:] += m_raw[:, i_m]/365*2
+
+im = tripcolor(m, axes=topax2, norm=LogNorm(vmin=1e-3, vmax=12), cmap=cmc.batlowK) # cmap=inferno
+cbar = fig.colorbar(im, ax=topax2)
+cbar.set_label("Meltwater input 2020 "+r"($\mathrm{m^3}$)")
+
+# format
+topax2.set_aspect('equal')
+topax2.set_xticks([])
+topax2.set_yticks([])
+topax2.spines[['right', 'left', 'top', 'bottom']].set_visible(False)
+topax2.set_ylim(-2.585e6,-2.47e6)
+topax2.set_xlim(-2.4e5,-2e4)
+# domain outline
+gdf = gpd.read_file(outline_path)
+gdf.plot(ax=topax2, facecolor='none', edgecolor='black', linewidth=1, label='Domain')
+
+# panel label
+topax2.annotate("b", [-2.4e5,-2.47e6-1e4], xytext=[-2.4e5-2e4,-2.47e6-1e4], fontsize=annotate_fs, fontweight="bold")
+
+######################
+# Scalebar & N arrow #
+######################
+
+# scale bar
+line_x = [-2.35e5,-2.25e5]
+line_y = [-2.58e6,-2.58e6]
+topax2.plot(line_x, line_y, color="black", lw=5)
+topax2.annotate("10 km", [-2.4e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
+# north arrow
+topax2.arrow(
+    -2.05e5, -2.58e6,
+    0, 1.2e4,
+    head_width=2500,
+    head_length=3000,
+    color='black'
+)
+topax2.annotate("N", [-2.02e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
+
+
+fig.tight_layout()
+
 ######################
 # Greenland inset    #
 ######################
 
 gdf_GrIS = gpd.read_file(outline_GrIS_path)
-axins2 = fig.add_subplot(gs[0, 4])
+axins2 = fig.add_subplot(gs_top[0,1])
 gdf_GrIS.plot(ax=axins2, facecolor='none', edgecolor='black', linewidth=0.5)
 
 gdf.plot(ax=axins2, facecolor='firebrick', alpha=0.8, edgecolor='black', linewidth=2)
@@ -210,13 +279,10 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 
         # load model output from hdf5 file
-        us_raw, m_raw, phi_raw, _, q_raw, Q_raw, n_idx, _ = load_model_output(timeseries_path)
+        us_raw, m_raw, phi_raw, _, q_raw, Q_raw, S_raw, n_idx, _ = load_model_output(timeseries_path)
 
         # get model time vector
-        start_date = datetime(model_start_yr, 1, 1)
-        dates_model = [start_date + timedelta(days=2*k) for k in range(n_idx)]
-        i_model = np.where( (np.array(dates_model) > xstart) &  (np.array(dates_model) < xend) )[0]
-        dates_model = np.array(dates_model)[i_model]
+        dates_model, i_model = get_model_dates(n_idx, xstart, xend)
 
         # get model time series, organize into matrix
         # model_matrix = np.zeros((len(ds_upglacier),len(i_model)))  # (space,time)

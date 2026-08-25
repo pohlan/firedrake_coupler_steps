@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timedelta
 import re
 import h5py
+import glob
 
 # get mesh and submesh
 def get_meshes(timeseries_path):
@@ -30,9 +31,9 @@ def load_model_output(timeseries_path):
         N_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/N/N'][()].T
         q_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_2/vecs/q/q'][()].T
         Q_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/Q/Q'][()].T
-        # S_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/S/S'][()].T
+        S_raw = h5file['topologies/firedrake_default_submesh_topology/dms/firedrake_dm_0_1_False_1/vecs/S/S'][()].T
         n_idx = us_raw.shape[1]
-    return us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, n_idx, N_raw
+    return us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, S_raw, n_idx, N_raw
 
 def get_model_dates(n_idx, xstart, xend, start_year=2014):
     start_date = datetime(start_year, 1, 1)
@@ -79,6 +80,30 @@ def get_obs_files(files, xrange):
     sorted_dates = sorted_dates[i_in_range]
     sorted_files = sorted_files[i_in_range]
     return sorted_dates, sorted_files
+
+def get_obs_error_files(xstart, xend, vel_dir):
+    _, ex_files = get_obs_files(glob.glob(vel_dir+"*ex*.tif"), xrange=(xstart,xend))
+    _, ey_files = get_obs_files(glob.glob(vel_dir+"*ey*.tif"), xrange=(xstart,xend))
+    _, vx_files = get_obs_files(glob.glob(vel_dir+"*vx*.tif"), xrange=(xstart,xend))
+    _, vy_files = get_obs_files(glob.glob(vel_dir+"*vy*.tif"), xrange=(xstart,xend))
+    return ex_files, ey_files, vx_files, vy_files
+
+def obs_sigma(v_x, v_y, e_x, e_y):
+    e_x = e_x + 1e-1
+    e_y = e_y + 1e-1
+    # sigmas = np.zeros(len(v_x))
+    # sigmas[:] = np.max(np.sqrt(v_x**2*e_x**2+v_y**2*e_y**2) / np.sqrt(v_x**2+v_y**2))
+    # return sigmas
+    return np.sqrt(v_x**2*e_x**2+v_y**2*e_y**2) / (np.sqrt(v_x**2+v_y**2)+1e-5)
+
+def get_obs_errors(xstart, xend, xc, yc, vel_dir):
+    ex_files, ey_files, vx_files, vy_files = get_obs_error_files(xstart, xend, vel_dir)
+    e_x = load_obs_timeseries(ex_files, xc, yc)[:, 0]
+    e_y = load_obs_timeseries(ey_files, xc, yc)[:, 0]
+    v_x = load_obs_timeseries(vx_files, xc, yc)[:, 0]
+    v_y = load_obs_timeseries(vy_files, xc, yc)[:, 0]
+    sig = obs_sigma(v_x, v_y, e_x, e_y)
+    return sig
 
 def interpolate_raster_to_points(file, xc, yc, min_x=-232904, max_x=-27945, min_y=-2578142, max_y=-2473340):
     r = gu.Raster(file)
@@ -216,8 +241,8 @@ def get_s_functions(dists,  xc, yc, mesh_, smesh_, profile_width):
 
     return s, s_sub
 
-# load velocity observations
-def load_obs_FunctionSpace(vel_dir, files, mesh_, xrange=(datetime(2016,1,2),datetime(2024,12,30))):
+# load velocity observations into a firedrake function space
+def load_obs_FunctionSpace(files, mesh_):
     # extract datetime object from filenames and sort after date
     date_pattern = r'\d{2}[A-Z][a-z]{2}\d{2}'
     format_string = "%d%b%y"
@@ -231,9 +256,6 @@ def load_obs_FunctionSpace(vel_dir, files, mesh_, xrange=(datetime(2016,1,2),dat
     pairs = zip(date_list, files)
     sorted_dates, sorted_files = zip(*sorted(pairs))
     sorted_dates, sorted_files = np.array(sorted_dates), np.array(sorted_files)
-    i_in_range = np.where((sorted_dates>xrange[0]) & (sorted_dates<xrange[-1]))
-    sorted_dates = sorted_dates[i_in_range]
-    sorted_files = sorted_files[i_in_range]
     # get function space
     V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
     meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
@@ -242,7 +264,7 @@ def load_obs_FunctionSpace(vel_dir, files, mesh_, xrange=(datetime(2016,1,2),dat
     U_obs = []
     U_mask = []
     for (i,f) in enumerate(sorted_files[:n_months]):
-        r = gu.Raster(f"{vel_dir}{f}")
+        r = gu.Raster(f)
         delta = r.res[0]*2
         r.crop([min(meshx_DG0)-delta, min(meshy_DG0)-delta, max(meshx_DG0)+delta, max(meshy_DG0)+delta], inplace=True)
         U = df.Function(V_DG0)
@@ -255,8 +277,6 @@ def load_obs_FunctionSpace(vel_dir, files, mesh_, xrange=(datetime(2016,1,2),dat
         mask.dat.data[i_finite] = 1
         U_obs.append(U)
         U_mask.append(mask)
-        # # save for visual check
-        # df.VTKFile("s_obs.pvd").write(U_obs[0])
     return sorted_dates, U_obs, U_mask
 
 def get_outflow_index_skeleton_mesh(mesh, smesh):
@@ -293,7 +313,7 @@ def get_outflow_index_skeleton_mesh(mesh, smesh):
 
     outflow_edge_coords = edge_coords[outflow]
 
-    coords_smesh = smesh.coordinates.dat.data_ro
+    coords_smesh = smesh.coordinates.dat.data_ro # coordinates of vertices
     x_smesh = coords_smesh[:,0]
     y_smesh = coords_smesh[:,1]
     i_coords = []
@@ -314,6 +334,81 @@ def get_outflow_index_skeleton_mesh(mesh, smesh):
     return connected_edges
 
 
+def get_interior_flux_edges(mesh, smesh, x0):
+    # get DG0 functions for cells in left and right side
+    V = df.FunctionSpace(mesh, "DG", 0)
+    x, y = df.SpatialCoordinate(mesh)
+    cell_x = df.Function(V).interpolate(x).dat.data_ro
+    left_cell = cell_x < x0
+    right_cell = cell_x >= x0
+
+    # determine the edges at the interface
+    facets = mesh.interior_facets
+    fc = facets.facet_cell
+    c0 = fc[:, 0]
+    c1 = fc[:, 1]
+    interface_facets = np.where(
+        (left_cell[c0] & right_cell[c1]) |
+        (right_cell[c0] & left_cell[c1])
+    )[0]
+
+    coords = mesh.coordinates.dat.data_ro
+    cells = mesh.coordinates.function_space().cell_node_list
+    cell_ids = facets.facet_cell[interface_facets, 0]
+    local_facet = facets.local_facet_dat.data_ro[interface_facets, 0]
+    edge_vertices = np.array([
+        np.delete(cells[c], lf)
+        for c, lf in zip(cell_ids, local_facet)
+        ])
+    # interface_nodes = np.unique(edge_vertices.ravel())
+    edge_coords = coords[edge_vertices]
+
+    coords_smesh = smesh.coordinates.dat.data_ro
+    x_smesh = coords_smesh[:,0]
+    y_smesh = coords_smesh[:,1]
+    i_coords = []
+    for (p0, p1) in edge_coords:
+        xx0, yy0 = p0
+        xx1, yy1 = p1
+        i_coords.append(np.argmin(np.sqrt((xx0-x_smesh)**2+(yy0-y_smesh)**2)))
+        i_coords.append(np.argmin(np.sqrt((xx1-x_smesh)**2+(yy1-y_smesh)**2)))
+
+    cells_smesh = smesh.coordinates.function_space().cell_node_list
+    boundary_nodes = np.array(i_coords)
+    interface_nodes = np.unique(boundary_nodes)
+
+    connected_edges = np.where(
+        np.isin(cells_smesh[:, 0], interface_nodes) |
+        np.isin(cells_smesh[:, 1], interface_nodes)
+    )[0]
+
+    # Keep only edges whose other endpoint is on the right side
+    right_edges = []
+
+    for edge in connected_edges:
+        n0, n1 = cells_smesh[edge]
+
+        n0_interface = n0 in interface_nodes
+        n1_interface = n1 in interface_nodes
+
+        if n0_interface and not n1_interface:
+            interface_node = n0
+            other_node = n1
+        elif n1_interface and not n0_interface:
+            interface_node = n1
+            other_node = n0
+        else:
+            # Both endpoints are interface nodes.
+            # This is an interface edge, so don't include it.
+            continue
+
+        if x_smesh[other_node] > x_smesh[interface_node]:
+            right_edges.append(edge)
+
+    connected_edges = np.asarray(right_edges, dtype=int)
+
+    return connected_edges
+
 def prepare_location_inputs(xc, yc):
     if np.isscalar(xc):
         return [[xc]], [[yc]]
@@ -321,7 +416,7 @@ def prepare_location_inputs(xc, yc):
 
 def get_model_timeseries_for_locations(mesh_, run_index, xstart, xend, xc, yc, start_year=2014):
     timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
-    us_raw, _, _, _, _, _, n_idx, _ = load_model_output(timeseries_path)
+    us_raw, _, _, _, _, _, _, n_idx, _ = load_model_output(timeseries_path)
 
     dates_model, i_model = get_model_dates(n_idx, xstart, xend, start_year=start_year)
 
