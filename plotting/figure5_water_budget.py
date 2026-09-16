@@ -20,7 +20,7 @@ xc = [[xcoords[0]]]
 yc = [[ycoords[0]]]
 x0 = 0.5*xcoords[0] + 0.5*xcoords[1]
 
-run_indices_suit = list(range(601,725))
+run_indices_suit = list(range(601,673))
 m_b_0 = 0.02
 run_indices = [314,478,656]
 model_labels  = ["Baseline", "Reduced sheet \nflow", r"$h_r=8$ m", "any", "any"]
@@ -29,6 +29,7 @@ cols = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 xstart, xend = datetime(2020,4,1),datetime(2021,6,1)
 # xstart,xend = datetime(2018,5,1),datetime(2022,6,1)
 xstart_winter, xend_winter = datetime(2020,10,1), datetime(2021,4,30)
+xstart_summer, xend_summer = datetime(2020,5,1), datetime(2020,9,30)
 
 outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 gdf = gpd.read_file(outline_path)
@@ -46,14 +47,16 @@ mesh_, smesh_ = get_meshes(timeseries_path)
 coords = smesh_.coordinates.dat.data  # mesh coordinates
 B, H, S = load_topography(mesh_, sig=5)
 
-fig = plt.figure(figsize=(20, 10))
-gs  = fig.add_gridspec(3, 3, left=0.07, right=0.95, hspace=0.05, top=0.9, bottom=0.1, width_ratios=[1,0.01,0.6], height_ratios=[1,0.4,1])
+fig = plt.figure(figsize=(26, 10))
+gs  = fig.add_gridspec(3, 5, left=0.07, right=0.97, hspace=0.05, top=0.9, bottom=0.1, width_ratios=[1,0.01,0.6,0.03,0.6], height_ratios=[1,0.4,1])
 
 # gs_top = gs[0].subgridspec(1, 5, hspace=0.0, wspace=0.04, )
 ax1 = fig.add_subplot(gs[0,0])
 ax2 = fig.add_subplot(gs[2,0])
 ax3 = fig.add_subplot(gs[0,2])
 ax4 = fig.add_subplot(gs[2,2])
+ax5 = fig.add_subplot(gs[0,4])
+ax6 = fig.add_subplot(gs[2,4])
 
 # inset for cross-section
 ax_inset = ax1.inset_axes([0.02, 0.5, 0.21, 0.5])
@@ -145,17 +148,25 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
     qtot_out = Q_out+q_out
     qtot_out_upper = Q_upper+q_upper
 
+    # calculate total winter discharge to compare to basal melt input (Discussion point)
+    _, i_summer = get_model_dates(n_idx, xstart_summer, xend_summer)
+    dates_winter, i_winter = get_model_dates(n_idx, xstart_winter, xend_winter)
+    i_budget_s = [np.isin(i,i_summer) for i in i_model]
+    i_budget_w = [np.isin(i,i_winter) for i in i_model]
+    budget_s = np.sum(ms[i_budget_s] - qtot_out[i_budget_s])
+    budget_w = np.sum(qtot_out[i_budget_w])
+    print(df.assemble(df.Constant(0.02)*df.dx(domain=mesh_))*sum(i_budget_w)*2/365*1e-9)
+    print(budget_w*2/365*1e-9)
+
     if i_r == 0:
-        ax1.plot(dates_model, m_upper/(365*24*3600), color="black", ls="dotted", label="Meltwater", lw=lw)
-    ax1.plot(dates_model, q_upper/(365*24*3600), label=model_label, color=col, lw=lw)
-    ax1.fill_between(dates_model, q_upper/(365*24*3600), qtot_out_upper/(365*24*3600), alpha=0.3, facecolor=col)
-    ax1.plot(dates_model, qtot_out_upper/(365*24*3600), label="", color=col, lw=lw, ls="dashdot", alpha=0.5)
+        ax1.plot(dates_model, m_upper*1e-9/365, color="black", ls="dotted", label="Meltwater", lw=lw)
+    ax1.plot(dates_model, q_upper*1e-9/365, label=model_label, color=col, lw=lw)
+    ax1.fill_between(dates_model, q_upper*1e-9/365, qtot_out_upper*1e-9/365, alpha=0.3, facecolor=col)
+    ax1.plot(dates_model, qtot_out_upper*1e-9/365, label="", color=col, lw=lw, ls="dashdot", alpha=0.5)
     ax1.legend()
     ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
-    ax1.set_ylabel("Discharge "+ r"$(\mathrm{m^3\,a^{-1}})$")
-    # ax1.set_yscale("log")
-    ax1.annotate("Upper domain: melt input vs. outflow through cross-section", xy=(0.45, 1.2), xycoords="axes fraction", fontsize=annotate_fs)
+    ax1.set_ylabel("Discharge "+ r"$(\mathrm{km^3\,d^{-1}})$")
     panel_letter_annotation(ax1, 0, annotate_fs, xyc=(0.03, 1.04))
 
     # add separate legend between panels
@@ -174,22 +185,23 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
 
     if i_r == 1:
         model_label = "Reduced \nsheet flow"
-    ax2.plot(dates_model, Q_upper/(365*24*3600), label=model_label, lw=lw, color=col, ls="dashed")
+    ax2.plot(dates_model, Q_upper*1e-9/365, label=model_label, lw=lw, color=col, ls="dashed")
     ax2.set_yscale('log')
     ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
     ax2.set_xlabel("Month of 2020 / 2021")
-    ax2.set_ylabel("Channel discharge "+ r"$(\mathrm{m^3\,a^{-1}})$")
+    ax2.set_ylabel("Channel discharge "+ r"$(\mathrm{km^3\,d^{-1}})$")
     if i_r == 1:
         ax2.vlines(xend_winter, -0.2, 100, color="black", ls="-.")
-        ax2.annotate(r"$Q_\mathrm{\,end}$", xy=[datetime(2021,5,3), 0.6]) #, xycoords="axes fraction")
-    panel_letter_annotation(ax2, 2, annotate_fs, xyc=(0.03, 1.04))
+        ax2.annotate(r"$Q_\mathrm{\,end}$", xy=[datetime(2021,5,6), 0.1],ha="left") #, xycoords="axes fraction")
+    panel_letter_annotation(ax2, 3, annotate_fs, xyc=(0.03, 1.04))
 
 
 
 dUs_A = []
 dUs_B = []
 budget_tot = []
+qtot_out_upper = []
 m_basal = []
 alpha_s = []
 h_r     = []
@@ -213,6 +225,7 @@ for (i_r,run_index) in enumerate(run_indices_suit):
     # extract q for the specified timestep
     q_out    = np.zeros(len(i_model))
     q_avg    = np.zeros(len(i_model))
+    q_upper  = np.zeros(len(i_model))
     Q_out    = np.zeros(len(i_model))
     Q_avg = np.zeros(len(i_model))
     Q_upper = np.zeros(len(i_model))
@@ -236,6 +249,7 @@ for (i_r,run_index) in enumerate(run_indices_suit):
         q_vec.dat.data[:,1] = q_vec_y
         q_out[i_time] = df.assemble(df.dot(q_vec, n) * df.ds(1))
         q_avg[i_time] = df.assemble(df.dot(q_vec,q_vec)**(0.5)*df.dx(domain=mesh_)) / df.assemble(df.Constant(1)*df.dx(domain=mesh_))
+        q_upper[i_time] = df.assemble(upper*(df.div(q_vec)) * df.dx)
         # sheet volume
         h = df.Function(V)
         h.dat.data[:] = h_raw[:, i_m]
@@ -273,6 +287,7 @@ for (i_r,run_index) in enumerate(run_indices_suit):
 
     # discharge
     Qs_channels.append(Q_upper[-1])
+    qtot_out_upper.append(np.sum(Q_upper+q_upper)/365*2)
 
     # volume
     V_sheet_sum.append((sheet_volumes/(sheet_volumes+channel_volumes))[-1])
@@ -285,20 +300,41 @@ for (i_r,run_index) in enumerate(run_indices_suit):
     h_winter_loc = load_model_timeseries(mesh_, h_raw, xc_input, yc_input, i_model)[:, 0]
     V_sheet_max.append(h_winter_loc.mean())
 
-
-im = ax3.scatter(np.array(Qs_channels)/(3600*24*365), dUs_A, markersz, m_basal, marker="o", cmap=cmc.berlin)
+# Point A, Q_end vs Delta u
+im = ax3.scatter(np.array(Qs_channels)*1e-9/365, dUs_A, markersz, m_basal, marker="o", cmap=cmc.berlin)
+ax3.set_xlabel(r"$Q_\mathrm{\,end}$ ($\mathrm{km^3\,d^{-1}}$)")
 ax3.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
 panel_letter_annotation(ax3, 1, annotate_fs, xyc=(0.03, 1.04))
 ax3.set_xscale('log')
 ax3.set_title("Point A")
 fig.colorbar(im, ax=ax3, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
 
-im = ax4.scatter(np.array(Qs_channels)/(3600*24*365), dUs_B, markersz, m_basal, marker="o", cmap=cmc.berlin)
-ax4.set_xlabel(r"$Q_\mathrm{\,end}$ ($\mathrm{m^3\,a^{-1}}$)")
+# Point B, Q_end vs Delta u
+im = ax4.scatter(np.array(Qs_channels)*1e-9/365, dUs_B, markersz, m_basal, marker="o", cmap=cmc.berlin)
+ax4.set_xlabel(r"$Q_\mathrm{\,end}$ ($\mathrm{km^3\,d^{-1}}$)")
 ax4.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
-panel_letter_annotation(ax4, 3, annotate_fs, xyc=(0.03, 1.04))
+panel_letter_annotation(ax4, 4, annotate_fs, xyc=(0.03, 1.04))
 ax4.set_xscale('log')
 ax4.set_title("Point B")
 fig.colorbar(im, ax=ax4, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+
+# Point A, budget vs Delta u
+im = ax5.scatter(np.array(qtot_out_upper)*1e-9/365, dUs_A, markersz, m_basal, marker="o", cmap=cmc.berlin)
+ax5.set_xlabel(r"Total winter discharge ($\mathrm{km^3}$)")
+ax5.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
+panel_letter_annotation(ax5, 2, annotate_fs, xyc=(0.03, 1.04))
+ax5.set_xscale('log')
+ax5.set_title("Point A")
+fig.colorbar(im, ax=ax5, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+
+# Point A, budget vs Delta u
+im = ax6.scatter(np.array(qtot_out_upper)*1e-9/365, dUs_B, markersz, m_basal, marker="o", cmap=cmc.berlin)
+ax6.set_xlabel(r"Total winter discharge ($\mathrm{km^3}$)")
+ax6.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
+panel_letter_annotation(ax6, 5, annotate_fs, xyc=(0.03, 1.04))
+ax6.set_xscale('log')
+ax6.set_title("Point B")
+fig.colorbar(im, ax=ax6, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+
 
 plt.savefig(f"plotting/main_figures/f05.jpg")

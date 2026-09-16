@@ -12,8 +12,9 @@ import pandas as pd
 
 run_indices_maps = [314, 478]
 model_labels = ["Baseline", "Reduced sheet flow"]
-xstart_winter, xend_winter = datetime(2020,10,1), datetime(2021,4,30)
-xstart_plot, xend_plot = datetime(2020, 5, 1), datetime(2021, 6, 20)
+year0 = 2020
+xstart_winter, xend_winter = datetime(year0,10,1), datetime(year0+1,4,30)
+xstart_plot, xend_plot = datetime(year0, 5, 1), datetime(year0+1, 6, 20)
 
 xcoords = [-205482.0,-144630.0]
 ycoords = [-2527653.0,-2.52e6]
@@ -108,6 +109,11 @@ for i in range(Uobs_time.shape[0]):
 
 map  = dU_obs.reshape(nx,ny)
 x, y = raster0.coords(grid=False)
+
+# save as netcdf
+# raster0.data = map
+# xarray_da = raster0.to_xarray()
+# xarray_da.to_netcdf(f"speedup_{year0}_{year0+1}.nc")
 
 # mask out values outside of domain
 domain_outline = gu.Vector(outline_path)

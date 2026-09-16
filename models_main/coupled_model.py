@@ -54,6 +54,7 @@ class SpecFO(object):
         self.results_dir = results_dir
         self.Us_file = df.VTKFile(results_dir+'df_U_s.pvd')
         self.Ub_file = df.VTKFile(results_dir+'df_U_b.pvd')
+        # self.tau_b_file = df.VTKFile(results_dir+'df_taub.pvd')
 
     def set_coupler(self,coupler):
         self.coupler = coupler
@@ -99,6 +100,7 @@ class SpecFO(object):
         self.Us = df.project(df.sqrt(self.u(0)**2+self.v(0)**2), self.coupler.Q_cg)
         # self.Ub = df.project(df.as_vector([self.u(1),self.v(1)]), self.coupler.Q_cg_vec)
         self.Ub = df.project(df.sqrt(self.u(1)**2+self.v(1)**2), self.coupler.Q_cg)
+        # self.tau_b_save = df.Function(self.coupler.Q_cg)
 
     def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1, N_frac=None, N=None):
         n          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.n)
@@ -193,15 +195,17 @@ class SpecFO(object):
         # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-10)
 
         # Coulomb, Hewitt 2013 / Schoof 2005
-        #### mu_b = df.Constant(0.1)
-        #### lambda_b = df.Constant(1.0)
-        #### eps_u = df.Constant(1e-4)
-        #### eps_N = df.Constant(1e4)
-        #### u_b = self.u_b = df.sqrt(u(1)**2 + v(1)**2 + eps_u**2)
-        #### N_eff = df.sqrt(self.coupler.hydro.N**2 + eps_N**2)
-        #### f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b))**(1/n)
-        #### tau_bx = f * u(1)/u_b
-        #### tau_by = f * v(1)/u_b
+        # mu_b = df.Constant(0.65) # 0.16 in Hewitt, 2013
+        # lambda_b = self.lambda_b = df.Constant(0.1) # 1 m in Hewitt, 2013
+        # eps_u = df.Constant(1e-3)
+        # eps_N = df.Constant(1e1)
+        # u_b = self.u_b = df.sqrt(u(1)**2 + v(1)**2 + eps_u**2)
+        # N_eff = self.N_eff = df.max_value(N, 1e4)
+        # # N_eff = df.sqrt(self.coupler.hydro.N**2 + eps_N**2)
+        # f   = mu_b*N_eff* (u_b/(lambda_b*A*N_eff**n+u_b))**(1/n)
+        # tau_bx = f * u(1)/u_b
+        # tau_by = f * v(1)/u_b
+        # self.tau_b = df.sqrt(tau_bx**2 + tau_by**2 + 1e-40)
 
         # Gagliardini with alpha=1 and q=1
         #### C  = df.Constant(0.16)
@@ -237,11 +241,15 @@ class SpecFO(object):
         Us_temp = df.project(df.sqrt(self.u(0)**2+self.v(0)**2), self.coupler.Q_cg)
         # Ub_temp = df.project(df.as_vector([self.u(1),self.v(1)]), self.coupler.Q_cg_vec)
         Ub_temp = df.project(df.sqrt(self.u(1)**2+self.v(1)**2), self.coupler.Q_cg)
+        # tau_b_temp = df.project(self.lambda_b*self.A*self.N_eff**3, self.coupler.Q_cg)
+        # tau_b_temp = df.project(self.tau_b, self.coupler.Q_cg)
 
         self.Us.dat.data[:] = Us_temp.dat.data_ro
         self.Ub.dat.data[:] = Ub_temp.dat.data_ro
+        # self.tau_b_save.dat.data[:] = tau_b_temp.dat.data_ro
         self.Us_file.write(self.Us, time=t)
         self.Ub_file.write(self.Ub, time=t)
+        # self.tau_b_file.write(self.tau_b_save, time=t)
 
 
 class GLADS(object):

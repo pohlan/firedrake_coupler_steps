@@ -37,7 +37,7 @@ year = 2021
 xstart,xend = datetime(year-1,4,2), datetime(year,10,30)
 xstart_y1, xend_y1 = datetime(year-1,4,2), datetime(year-1,10,30)
 
-ds_vline = [np.array([10e3,35e3]),[],[],np.array([16e3,]),np.array([9e3,])]
+ds_vline = [np.array([10e3,35e3]),np.array([10e3,]),[],np.array([16e3,]),[]]
 
 # plotting parameters
 color_map = cmc.managua
@@ -128,7 +128,7 @@ cs = topax.contour(x, np.flip(y), data,
 #                 colors="black",
 #                 linewidths=0.5,
 # )
-labels = topax.clabel(cs, fmt="%d m", fontsize=28, levels=np.arange(900, 3000, 300), rightside_up=False)
+labels = topax.clabel(cs, fmt="%d m", fontsize=27, levels=np.arange(1400, 3000, 300), rightside_up=False)
 
 ######################
 # Flowline profiles  #
@@ -148,7 +148,7 @@ for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_na
     dists, xx, yy = get_profile(flowlines_dir, gl_name)
     i_dists = np.where(dists<profile_stop)
     dists, xx, yy = dists[i_dists], xx[i_dists], yy[i_dists]
-    topax.plot(xx,yy,color=col,lw=5)
+    topax.plot(xx,yy,color=col,lw=3)
 
     marker_x = []
     marker_y = []
@@ -160,14 +160,14 @@ for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_na
         if gl == 5:
             topax.annotate(f"{int(d*1e-3)} km",[marker_x[-1]+m_offset[0],marker_y[-1]+m_offset[1]], c=col, fontsize=annotate_fs, va="center", ha="left")
             # topax.annotate(f"{int(d*1e-3)} km",[-2.5e5+d*3,-2.58e6], c=col, fontsize=annotate_fs)
-    topax.scatter(marker_x, marker_y, 150, c=col, edgecolors='black', marker="o",zorder=3)
+    topax.scatter(marker_x, marker_y, 130, c=col, edgecolors='black', marker="o",zorder=3)
     topax.annotate(strng,[marker_x[0],marker_y[0]], xytext=[marker_x[0]+offset_crd[0],marker_y[0]+offset_crd[1]], c=col, fontsize=annotate_fs)
 
 
 ################
 # Panel label  #
 ################
-topax.annotate("a", [-2.4e5,-2.47e6-1e4], xytext=[-2.4e5-2e4,-2.47e6-1e4], fontsize=annotate_fs, fontweight="bold")
+topax.annotate("a", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="bold", annotation_clip=False)
 
 
 
@@ -187,7 +187,7 @@ for (i_time, i_m) in enumerate(i_model):
 
 im = tripcolor(m, axes=topax2, norm=LogNorm(vmin=1e-3, vmax=12), cmap=cmc.batlowK) # cmap=inferno
 cbar = fig.colorbar(im, ax=topax2)
-cbar.set_label("Meltwater input 2020 "+r"($\mathrm{m^3}$)")
+cbar.set_label("Meltwater input 2020 "+r"($\mathrm{m}$)")
 
 # format
 topax2.set_aspect('equal')
@@ -201,7 +201,7 @@ gdf = gpd.read_file(outline_path)
 gdf.plot(ax=topax2, facecolor='none', edgecolor='black', linewidth=1, label='Domain')
 
 # panel label
-topax2.annotate("b", [-2.4e5,-2.47e6-1e4], xytext=[-2.4e5-2e4,-2.47e6-1e4], fontsize=annotate_fs, fontweight="bold")
+topax2.annotate("b", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="bold", annotation_clip=False)
 
 ######################
 # Scalebar & N arrow #
@@ -337,7 +337,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         axi.set_xlim(0,np.max(ds_upglacier)*1e-3)
         axi.yaxis.set_major_locator(mdates.MonthLocator(interval=2))
         axi.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
-        axi.annotate(f"{idx_to_letter(i_run*len(glacier_ids)+ig+1)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+        axi.annotate(f"{idx_to_letter(i_run*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
 
     ##########################
@@ -376,7 +376,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     xl = ax3.get_xlim()
     ax3.yaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax3.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
-    ax3.annotate(f"{idx_to_letter(2*len(glacier_ids)+ig+1)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+    ax3.annotate(f"{idx_to_letter(2*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
             ax3.vlines(x=d_vline*1e-3, ymin=ax3.get_ylim()[0], ymax=ax3.get_ylim()[1], color='cyan', linestyle='-', lw=3)
@@ -417,7 +417,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         cax.axis("off")
     ax4.set_xlim(xl)
     # ax4.set_xlim(-0.5,(profile_stop+ds/2)*1e-3)
-    ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig+1)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+    ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
             ax4.vlines(x=d_vline*1e-3, ymin=ax4.get_ylim()[0], ymax=ax4.get_ylim()[1], color='cyan', linestyle='-', lw=3)

@@ -129,9 +129,9 @@ dt0= 2*hour
 
 if args.beta2_inversion:
     # get beta2 from inversion
-    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run477.h5"
+    chk_file = f"test_inversion/beta2_opt_1e-2.0_run477.h5"
     # chk_file = f"test_inversion/beta2_opt_1e-2.0_run304.h5"
-    chk_file = f"test_inversion/beta2_opt_1e-2.0_run{args.run_index}.h5"
+    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run{args.run_index}.h5"
     with CheckpointFile(chk_file, 'r') as afile:
             mesh_ = afile.load_mesh()
             beta2 = afile.load_function(mesh_, name="beta2")
@@ -142,9 +142,49 @@ else:
 
 # spatially varying h_r
 # x, y = df.SpatialCoordinate(mesh)
-# h_r = df.Function(hydro.V_h).interpolate(1.0 + (7.0 / 60852.0) * (x + 205482.0))
-# h_r.interpolate(df.max_value(df.min_value(h_r, 8.0), 1.0))
+# h_r = df.Function(hydro.V_h).interpolate(1.0 + (7.0 / 50000.0) * (x + 180482.0))
+# h_r.interpolate(df.max_value(df.min_value(h_r, 12.0), 0.6))
 # df.VTKFile(results_dir+"h_r.pvd").write(h_r)
+
+# spatially varying k_s
+# file = "speedup_2019_2020.nc"
+# from plotting.plotting_functions import get_raster
+# r = get_raster(file)
+# V = df.FunctionSpace(mesh_, "CG", 1)
+# meshx, meshy = zip(*hlp.get_coordinates(mesh_, "CG", 1))
+# dU = df.Function(V)
+# dU.dat.data[:] = r.interp_points((meshx, meshy), as_array=True)
+# k_s = df.Function(V).interpolate(10**(-2-dU/2))
+# k_s.interpolate(df.max_value(df.min_value(k_s, 1e-2), 1e-4))
+# df.VTKFile(results_dir+"k_s.pvd").write(k_s)
+
+# locally reduced k_s for Isunnguata Sermia
+# from plotting.loading_functions import get_profile
+# from shapely.geometry import Point
+# flowlines_dir = "Greenland_data/profiles/"
+# gl_name = "Isunnguata Sermia"
+# dists, xx, yy = get_profile(flowlines_dir, gl_name)
+# i_keep = np.where(dists < 25e3)
+# dists = dists[i_keep]
+# xx = xx[i_keep]
+# yy = yy[i_keep]
+# profile_width = 4.5e3
+# coords = [(x,y) for (x,y) in zip(xx,yy)]
+# pts_flowl = [Point(c) for c in coords]
+# V_DG0 = df.FunctionSpace(mesh_, "DG", 0)
+# meshx_DG0, meshy_DG0 = zip(*hlp.get_coordinates(mesh_, "DG", 0))
+# s_sub = df.Function(V_DG0)
+# for (i,(mx, my)) in enumerate(zip(meshx_DG0, meshy_DG0)):
+#     dist_to_flowl_pts = Point(mx,my).distance(pts_flowl)
+#     i_flowl = np.argmin(dist_to_flowl_pts)
+#     if dist_to_flowl_pts[i_flowl] < profile_width:
+#         s_sub.dat.data[i] = 1
+# k_s = df.Function(V_DG0).interpolate(0.0004)
+# k_s.dat.data[np.where(s_sub.dat.data_ro==1)] = 0.01
+# df.VTKFile(results_dir+"k_s.pvd").write(k_s)
+
+
+# hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
 # hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)

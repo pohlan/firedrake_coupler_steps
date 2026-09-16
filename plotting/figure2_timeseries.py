@@ -12,15 +12,34 @@ from datetime import datetime, timedelta
 flowlines_dir = "Greenland_data/profiles/"
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
 
+# whether to plot Fig. 2 in main document or same figure for different points as in supplements
+fig_mode = ["main","supp"][0]
+
 # profile width, which runs and glaciers to plot
 profile_width = 4.5e3
-ds_upglacier = [10e3,35e3,10e3,16e3]
 deltas_upglacier = [500,500,500,500]
-# glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Ørkendalen", "Isorlersuup"]
-glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Isorlersuup"]
+if fig_mode == "main":
+    ds_upglacier = [10e3,35e3,10e3,16e3]
+    glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Isorlersuup"]
+    width_ratios = [6, 6, 0.2, 6, 0.2, 6, 1]
+    title_bar_lengths = [2,1,1]
+    pw_lims = (-0.35,1.1)
+    y_Jan_annot = -0.3
+    speed_lims = (-80,140)
+    figname = "f02"
+else:
+    ds_upglacier = [10e3,30e3,10e3,30e3]
+    glacier_names = ["Ørkendalen", "Ørkendalen", "Glacier 5", "Glacier 5"]
+    width_ratios = [6, 6, 0.2, 6, 0.0, 6, 1]
+    title_bar_lengths = [2,3]
+    pw_lims = (-1.2,1.1)
+    y_Jan_annot = 0.4
+    speed_lims = (-120,140)
+    figname = "fS02"
+
 n_glaciers = len(glacier_names)
 run_indices = [314,478]
-model_start_years = [2014,2014] # ToDo: automate this
+model_start_years = [2014,2014]
 model_labels = ["Baseline", "Reduced \nsheet flow"]
 
 # time period to plot
@@ -55,12 +74,12 @@ annotate_fs = 18
 
 # prepare figure, gridspecs
 fig = plt.figure(figsize=(n_glaciers*7,13))
-gs = fig.add_gridspec(5, n_glaciers+3, left=0.05, right=0.93, top=0.95, bottom=0.1, hspace=0.0, wspace=0.1, width_ratios=[6, 6, 0.2, 6, 0.2, 6, 1], height_ratios=[2,2,10,10,10])
+gs = fig.add_gridspec(5, n_glaciers+3, left=0.05, right=0.93, top=0.95, bottom=0.1, hspace=0.0, wspace=0.1, width_ratios=width_ratios, height_ratios=[2,2,10,10,10])
 axes = np.array([[fig.add_subplot(gs[j, i]) for i in [0,1,3,5]] for j in range(2,5)])
 
 # set title for the two glaciers, group the columns
 i0=0
-for (i,(glacier_name,l_title)) in enumerate(zip([glacier_names[0],glacier_names[2],glacier_names[3]],[2,1,1])):
+for (i,(glacier_name,l_title)) in enumerate(zip(np.unique(glacier_names),title_bar_lengths)):
     topax = fig.add_subplot(gs[0, i0:i0+l_title])
     topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
     topax.set_xlim(0,1)
@@ -87,7 +106,7 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         ax1 = axes[0,ig]
         U_model = load_model_timeseries(mesh_, us_raw, [xc], [yc], i_model)
         m_time  = load_model_timeseries(mesh_, m_raw, [xc], [yc], i_model)[:,0]
-        plot_vel_timeseries(dates_model, U_model, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1)
+        plot_vel_timeseries(dates_model, U_model, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, speed_lims)
         if ig > 0:
             ax1.set_ylabel("")
         ax1.set_xlabel("")
@@ -103,7 +122,7 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         # df_PwPi = pd.DataFrame(Pw_Pi, index=dates_model_pd)
         # Pw_Pi_resampled = df_PwPi.resample('10D').mean()
         ax2.plot(dates_model, Pw_Pi, label=model_label, lw=lw, color=color)
-        format_ax(ax2, xstart, xend, ig, panel_idx=4+ig, ylims=(-0.35,1.1), ylabel=r"$p_w / p_i$" if ig == 0 else "")
+        format_ax(ax2, xstart, xend, ig, panel_idx=4+ig, ylims=pw_lims, ylabel=r"$p_w / p_i$" if ig == 0 else "")
         ax2.set_xlabel("")
         ax2.set_xticks([])
         # legend outside of plots, in separate axis
@@ -114,7 +133,7 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
             lax.legend(handles=lines, labels=labels, loc=(-0.05,0.2), frameon=False)
             lax.axis("off")
         if (run_index == run_indices[-1]) & (ig==0):
-            ax2.annotate("January", xy=[datetime(2020,2,1),-0.3], rotation=90)
+            ax2.annotate("January", xy=[datetime(2020,2,1),y_Jan_annot], rotation=90)
 
         # plot discharges q and Q
         ax3 = axes[2, ig]
@@ -152,5 +171,4 @@ for ax in axes[0,:]:
     ax.set_ylim(global_ymin, global_ymax)
 
 plt.tight_layout(pad=0.4)
-plt.savefig(f"plotting/output/timeseries_run{run_indices[0]}_{run_indices[1]}_d{int(ds_upglacier[0]*1e-3)}_{int(ds_upglacier[1]*1e-3)}.jpg", dpi=150, bbox_inches='tight')
-plt.savefig(f"plotting/main_figures/f02.jpg")
+plt.savefig(f"plotting/main_figures/{figname}.jpg")

@@ -47,10 +47,10 @@ def idx_to_month(idx, dt=2):
 def idx_to_letter(i):
     return chr(ord('a') + i)
 
-def remove_axes(ax):
+def remove_axes(ax, xlims=(-2.4e5,-0.2e5), ylims=(-2.585e6,-2.47e6)):
     ax.set_aspect('equal')
-    ax.set_xlim(-2.4e5,-0.2e5)
-    ax.set_ylim(-2.585e6,-2.47e6)
+    ax.set_xlim(xlims)
+    ax.set_ylim(ylims)
     ax.set_xticks([])
     ax.set_yticks([])
 
@@ -83,7 +83,7 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
     panel_label = idx_to_letter(panel_idx)
     ax.annotate(panel_label, xy=(0.03,0.9), xycoords="axes fraction", fontsize=18, fontweight="bold")
 
-def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1):
+def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, ylims):
     # observations, plot only if the ax is empty still to avoid re-doing it several times
     if len(ax1.lines) == 0:
         obs_mean = np.mean(np.array(Uobs)[np.where(np.isfinite(Uobs))])
@@ -105,7 +105,7 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
 
     # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    format_ax(ax1, xstart, xend, ig, panel_idx=ig, ylims=(-80,140), ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
+    format_ax(ax1, xstart, xend, ig, panel_idx=ig, ylims=ylims, ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
     # format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
 
     # melt input, also only plot once the first time
@@ -254,3 +254,38 @@ def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, var, xstart, xend, xs
     panel_letter_annotation(ax, ii, annotate_fs)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+
+
+def get_Q_lines(Q_vals, smesh_):
+    # edge coordinages
+    coords = smesh_.coordinates.dat.data
+    # get cell-vertex connectivity using CG function space
+    V_CG = df.FunctionSpace(smesh_, "CG", 1)
+    cells = V_CG.cell_node_list
+    # create line segments for mesh edges, each colored by Q value
+    lines = []
+    colors = []
+    # determine if cells are edges (2 vertices) or triangles (3 vertices)
+    num_vertices_per_cell = cells.shape[1]
+    for cell_idx, cell in enumerate(cells):
+        q_val = Q_vals[cell_idx]
+        vertices = cell
+        if num_vertices_per_cell == 2:
+            # ddges: just draw the single line segment
+            p1 = coords[vertices[0]]
+            p2 = coords[vertices[1]]
+            lines.append([p1[:2], p2[:2]])
+            colors.append(q_val)
+        elif num_vertices_per_cell == 3:
+            # triangles: draw all 3 edges
+            edges = [(vertices[0], vertices[1]), (vertices[1], vertices[2]), (vertices[2], vertices[0])]
+            for edge in edges:
+                p1 = coords[edge[0]]
+                p2 = coords[edge[1]]
+                lines.append([p1[:2], p2[:2]])
+                colors.append(q_val)
+    # Create LineCollection and add to plot
+    # lc = mc.LineCollection(lines, cmap='Greys',
+                        #    norm=plt.Normalize(vmin=np.nanmin(Q_vals)*(1), vmax=Q_min*1000))
+
+    return lines, colors
