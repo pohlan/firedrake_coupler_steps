@@ -133,6 +133,8 @@ class SpecFO(object):
         else:
             N = df.Function(self.coupler.Q_cg).interpolate(N)
 
+        nhat = df.FacetNormal(self.coupler.mesh)
+
         def dsdx(s):
             return 1./H*(S.dx(0) - s*H.dx(0))
 
@@ -182,6 +184,17 @@ class SpecFO(object):
         def tau_dy(s):
             return rho_i*g*H*S.dx(1)*lamda_y(s)
 
+        def outer_x(s):
+            return H*(eta_v(s))*lamda_x(s)*(
+                nhat[0]*(4*(u.dx(s,0) + u.ds(s)*dsdx(s)) + 2*(v.dx(s,1) + v.ds(s)*dsdy(s)))\
+                + nhat[1]*((u.dx(s,1) + u.ds(s)*dsdy(s)) + (v.dx(s,0) + v.ds(s)*dsdx(s)))
+            )
+        def outer_y(s):
+            return H*(eta_v(s))*lamda_y(s)*(
+                nhat[0]*((u.dx(s,1) + u.ds(s)*dsdy(s)) + (v.dx(s,0) + v.ds(s)*dsdx(s)))\
+                + nhat[1]*(2*(u.dx(s,0) + u.ds(s)*dsdx(s)) + 4*(v.dx(s,1) + v.ds(s)*dsdy(s)))
+            )
+
         # GET QUADRATURE POINTS (THIS SHOULD BE ODD: WILL GENERATE THE GAUSS-LEGENDRE RULE
         # POINTS AND WEIGHTS OF O(n), BUT ONLY THE POINTS IN [0,1] ARE KEPT< DUE TO SYMMETRY.
         points,weights = half_quad(9)
@@ -230,8 +243,8 @@ class SpecFO(object):
         # self.R_u_body_print = w_R_u * R_u_body
         # self.R_v_body_print = w_R_v * R_v_body
 
-        R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3)
-        R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3)
+        R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3) + vi.intz(outer_x)*df.ds(3)
+        R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3) + vi.intz(outer_y)*df.ds(3)
 
         self.coupler.R += R_u_body
         self.coupler.R += R_v_body
@@ -448,9 +461,9 @@ class GLADS(object):
         # opening and closure for sheets and channels
         O   = Max(u_b*(h_r - h)/l_r,0)
         # O = sum([p*(h_r/l_r)*u_b*Max(1 - h/h_r_i,0) for p,h_r_i in zip(probs,h_r_s)])
-        C   = A_s*h*abs(N)**(n-1)*Max(N,0)
+        C   = A_s*h*abs(N)**(n-1)*Max(N,1e4)
         O_c = (Chi-Pi) / (rho_i*L)
-        C_c = A_c*S*abs(N)**(n-1)*Max(N,0)
+        C_c = A_c*S*abs(N)**(n-1)*Max(N,1e4)
 
         # weak form residuals
         R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
@@ -730,6 +743,7 @@ class SHAKTI(object):
 
 class Coupler_Flow_Hydro(object): # ice flow + hydro
     def __init__(self,mesh,stokes,hydro):
+        self.mesh = mesh
 
         # physical constants used in both models
         self.n     = df.Constant(3)           # -              -- flow exponent
@@ -805,6 +819,7 @@ class Coupler_Hydro(object):  # hydro only
 
 class Coupler_Flow(object):  # hydro only
     def __init__(self,mesh,stokes):
+        self.mesh = mesh
 
         # physical constants used in both models
         self.n     = df.Constant(3)           # -              -- flow exponent

@@ -62,7 +62,8 @@ for (k,crd) in enumerate(hydro_coords):
 # label
 physical_line = gmsh.model.addPhysicalGroup(1, np.array(lines)[i_bc_lines])
 non_bc_lines = np.delete(lines, i_bc_lines, axis=0)
-physical_line = gmsh.model.addPhysicalGroup(1, non_bc_lines)
+physical_line = gmsh.model.addPhysicalGroup(1, np.concatenate([non_bc_lines[-187:],non_bc_lines[0:51]])) # terminus: no-stress
+physical_line = gmsh.model.addPhysicalGroup(1, non_bc_lines[51:-187]) # lateral
 physical_surface = gmsh.model.addPhysicalGroup(2, [plane])
 
 
@@ -75,6 +76,7 @@ gmsh.model.mesh.field.setAsBackgroundMesh(f)
 
 gmsh.model.mesh.generate(2)
 gmsh.write(f"{data_dir}russel.msh")
+# gmsh.write(f"{data_dir}russel_Mank5.msh")
 gmsh.finalize()
 
 # plot

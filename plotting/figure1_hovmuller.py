@@ -41,8 +41,8 @@ ds_vline = [np.array([10e3,35e3]),np.array([10e3,]),[],np.array([16e3,]),[]]
 
 # plotting parameters
 color_map = cmc.managua
-plt.rcParams['font.size'] = 33
-annotate_fs = 33
+plt.rcParams['font.size'] = 45
+annotate_fs = 45
 lw = 2.5
 clims = (20,300)
 
@@ -53,11 +53,11 @@ B, H, S = load_topography(mesh_)
 
 # prepare figure, gridspecs
 fig = plt.figure(figsize=(len(glacier_ids)*8,33))
-gs = fig.add_gridspec(6, len(glacier_ids)+1, left=0.11, right=0.92, top=0.95, bottom=0.08, hspace=0.15, wspace=0.1, width_ratios=[15, 15, 15, 15, 15, 1], height_ratios=[1.5, 0.2, 1, 1, 1, 0.8])
-gs_top = gs[0, :].subgridspec(1, 3, hspace=0.0, wspace=0.04, width_ratios=[1,0.2,1])
+gs = fig.add_gridspec(5, len(glacier_ids)+2, left=0.00, right=0.99, top=1.04, bottom=0.05, hspace=0.05, wspace=0.07, width_ratios=[17, 15, 15, 15, 15, 15, 6], height_ratios=[1.7, 1, 1, 1, 0.7])
+gs_top = gs[0, :].subgridspec(1, 5, hspace=0.0, wspace=0.0, width_ratios=[0.2,1,0.2,1,0.05])
 
 # plot bed topography
-topax = fig.add_subplot(gs_top[0,0])
+topax = fig.add_subplot(gs_top[0,1])
 
 def get_topo(file):
     r = gu.Raster(file)
@@ -74,37 +74,14 @@ r_bed = get_topo("Greenland_data/BedMachineGreenland-v5_bed_smooth_sig5.nc")
 # im = topax.pcolormesh(x,np.flip(y),data,cmap="terrain")
 
 im = tripcolor(B, axes=topax, cmap="terrain")
-cbar = fig.colorbar(im, ax=topax)
+cbar = fig.colorbar(im, ax=topax, shrink=0.55)
 cbar.set_label("Bed elevation (m)")
 # format
-topax.set_aspect('equal')
-topax.set_xticks([])
-topax.set_yticks([])
-topax.spines[['right', 'left', 'top', 'bottom']].set_visible(False)
-topax.set_ylim(-2.585e6,-2.47e6)
-topax.set_xlim(-2.4e5,-2e4)
+remove_axes(topax, xlims=(-2.4e5,-2e4), ylims=(-2.58e6,-2.472e6))
 # domain outline
 gdf = gpd.read_file(outline_path)
 gdf.plot(ax=topax, facecolor='none', edgecolor='black', linewidth=1, label='Domain')
 
-######################
-# Scalebar & N arrow #
-######################
-
-# # scale bar
-# line_x = [-2.35e5,-2.25e5]
-# line_y = [-2.58e6,-2.58e6]
-# topax.plot(line_x, line_y, color="black", lw=5)
-# topax.annotate("10 km", [-2.4e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
-# # north arrow
-# topax.arrow(
-#     -2.05e5, -2.58e6,
-#     0, 1.2e4,
-#     head_width=2500,
-#     head_length=3000,
-#     color='black'
-# )
-# topax.annotate("N", [-2.02e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
 
 ######################
 # Surface elevation  #
@@ -128,7 +105,7 @@ cs = topax.contour(x, np.flip(y), data,
 #                 colors="black",
 #                 linewidths=0.5,
 # )
-labels = topax.clabel(cs, fmt="%d m", fontsize=27, levels=np.arange(1400, 3000, 300), rightside_up=False)
+labels = topax.clabel(cs, fmt="%d m", fontsize=annotate_fs*0.85, levels=np.arange(1400, 3000, 300), rightside_up=False)
 
 ######################
 # Flowline profiles  #
@@ -138,10 +115,10 @@ gls = [1,2,3,4,5]
 ds_timeseries = [np.array([10e3,30e3]),[],[],np.array([15e3,25e3]),[]]
 colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 
-annotate_offsets = [[-2e4,1e4],[-4.5e4,-1e3],[-6e4,-8e3],[-6e4,-0.6e4],[-5.5e4,-0.5e4]]
+annotate_offsets = [[-5e4,-0.02e4],[-4.8e4,-4e3],[-6.9e4,-1.2e4],[-6.5e4,-1.1e4],[-6.2e4,-0.6e4]]
 
 gl_names = ["Isunnguata-Sermia","Russel","Ørkendalen","Isorlersuup","Glacier-5"]
-gl_annotations = ["Isunnguata\n Sermia","Russel","Ørkendalen","Isorlersuup","Glacier 5"]
+gl_annotations = ["Isunnguata\nSermia","Russel","Ørkendalen","Isorlersuup","Glacier 5"]
 for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_names, annotate_offsets, ds_timeseries):
     col = "black"
     fl = [0,4,1,2,3][gl-1]
@@ -153,12 +130,12 @@ for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_na
     marker_x = []
     marker_y = []
     d_marker = [10e3, 25e3, 40e3]
-    offsets_marker = [[-1e4,-1e4],[-1e4,+5e3],[4e3,0e3]]
+    offsets_marker = [[-1.5e4,-1.1e4],[-1e4,+5e3],[-1.1e4,-9e3]]
     for (d,m_offset) in zip(d_marker,offsets_marker):
         marker_x.append(xx[np.argmin(abs(dists-d))])
         marker_y.append(yy[np.argmin(abs(dists-d))])
         if gl == 5:
-            topax.annotate(f"{int(d*1e-3)} km",[marker_x[-1]+m_offset[0],marker_y[-1]+m_offset[1]], c=col, fontsize=annotate_fs, va="center", ha="left")
+            topax.annotate(f"{int(d*1e-3)} km",[marker_x[-1]+m_offset[0],marker_y[-1]+m_offset[1]], c=col, fontsize=annotate_fs*0.9, va="center", ha="left")
             # topax.annotate(f"{int(d*1e-3)} km",[-2.5e5+d*3,-2.58e6], c=col, fontsize=annotate_fs)
     topax.scatter(marker_x, marker_y, 130, c=col, edgecolors='black', marker="o",zorder=3)
     topax.annotate(strng,[marker_x[0],marker_y[0]], xytext=[marker_x[0]+offset_crd[0],marker_y[0]+offset_crd[1]], c=col, fontsize=annotate_fs)
@@ -167,7 +144,7 @@ for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_na
 ################
 # Panel label  #
 ################
-topax.annotate("a", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="bold", annotation_clip=False)
+topax.annotate("a", [0.9, 1.0], fontsize=annotate_fs, fontweight="bold", annotation_clip=False, xycoords="axes fraction", va="top")
 
 
 
@@ -176,7 +153,7 @@ topax.annotate("a", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="
 #########################
 
 # topax2 = fig.add_subplot(gs[0, 3:6])
-topax2 = fig.add_subplot(gs_top[0,2])
+topax2 = fig.add_subplot(gs_top[0,3])
 
 _, m_raw, _, _, _, _, _, n_idx, _ = load_model_output(timeseries_path)
 dates_model, i_model = get_model_dates(n_idx, xstart_y1, xend_y1)
@@ -186,22 +163,15 @@ for (i_time, i_m) in enumerate(i_model):
     m.dat.data[:] += m_raw[:, i_m]/365*2
 
 im = tripcolor(m, axes=topax2, norm=LogNorm(vmin=1e-3, vmax=12), cmap=cmc.batlowK) # cmap=inferno
-cbar = fig.colorbar(im, ax=topax2)
-cbar.set_label("Meltwater input 2020 "+r"($\mathrm{m}$)")
+cbar = fig.colorbar(im, ax=topax2, shrink=0.55)
+cbar.set_label("Meltwater \ninput 2020 "+r"($\mathrm{m}$)")
 
 # format
-topax2.set_aspect('equal')
-topax2.set_xticks([])
-topax2.set_yticks([])
-topax2.spines[['right', 'left', 'top', 'bottom']].set_visible(False)
-topax2.set_ylim(-2.585e6,-2.47e6)
-topax2.set_xlim(-2.4e5,-2e4)
+remove_axes(topax2, xlims=(-2.4e5,-2e4), ylims=(-2.58e6,-2.472e6))
 # domain outline
 gdf = gpd.read_file(outline_path)
 gdf.plot(ax=topax2, facecolor='none', edgecolor='black', linewidth=1, label='Domain')
 
-# panel label
-topax2.annotate("b", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="bold", annotation_clip=False)
 
 ######################
 # Scalebar & N arrow #
@@ -210,17 +180,17 @@ topax2.annotate("b", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight=
 # scale bar
 line_x = [-2.35e5,-2.25e5]
 line_y = [-2.58e6,-2.58e6]
-topax2.plot(line_x, line_y, color="black", lw=5)
+topax2.plot(line_x, line_y, color="black", lw=10)
 topax2.annotate("10 km", [-2.4e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
 # north arrow
 topax2.arrow(
-    -2.05e5, -2.58e6,
+    -1.95e5, -2.58e6,
     0, 1.2e4,
     head_width=2500,
     head_length=3000,
     color='black'
 )
-topax2.annotate("N", [-2.02e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
+topax2.annotate("N", [-1.92e5,line_y[0]+5e3], c="black", fontsize=annotate_fs)
 
 
 fig.tight_layout()
@@ -230,19 +200,14 @@ fig.tight_layout()
 ######################
 
 gdf_GrIS = gpd.read_file(outline_GrIS_path)
-axins2 = fig.add_subplot(gs_top[0,1])
+axins2 = fig.add_subplot(gs_top[0,2])
 gdf_GrIS.plot(ax=axins2, facecolor='none', edgecolor='black', linewidth=0.5)
 
 gdf.plot(ax=axins2, facecolor='firebrick', alpha=0.8, edgecolor='black', linewidth=2)
 
-axins2.set_aspect('equal')
-axins2.set_xticks([])
-axins2.set_yticks([])
-axins2.spines[['right', 'left', 'top', 'bottom']].set_visible(False)
 x0, x1 = axins2.get_xlim()
 y0, y1 = axins2.get_ylim()
-axins2.set_xlim(x0-0.2*(x1-x0), x1+0.2*(x1-x0))
-axins2.set_ylim(y0-0.2*(y1-y0), y1+0.2*(y1-y0))
+remove_axes(axins2, xlims=(x0-0.2*(x1-x0), x1+0.2*(x1-x0)), ylims=(y0-0.2*(y1-y0), y1+0.2*(y1-y0)))
 
 # arrow
 x, y    = r_surf.coords(grid=False)
@@ -256,6 +221,12 @@ axins2.arrow(
     head_length=90000,
     color='firebrick'
 )
+
+# panel label
+topax2.annotate("b", [0.9, 1.0], fontsize=annotate_fs, fontweight="bold", annotation_clip=False, xycoords="axes fraction", va="top")
+# To not make the b vanish behind the inset:
+topax2.set_zorder(10)
+axins2.set_zorder(5)
 
 
 for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vline)):
@@ -300,7 +271,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         # make the corresponding date the middle of the month rather than the beginnning, to be consistent with observations
         monthly_means.index = (monthly_means.index + (monthly_means.index + pd.offsets.MonthEnd(0) - monthly_means.index) / 2)
         # plot
-        axi = fig.add_subplot(gs[i_run+2, ig])
+        axi = fig.add_subplot(gs[i_run+1, ig+1])
         im1 = axi.pcolormesh(
             ds_upglacier * 1e-3,
             monthly_means.index,
@@ -319,23 +290,21 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
             axi.vlines(x=d_vline*1e-3, ymin=axi.get_ylim()[0], ymax=axi.get_ylim()[1], color='cyan', linestyle='-', lw=3)
 
 
-        im1.set_clim(clims)
         axi.tick_params(axis='x', labelbottom=False, length=4)  # remove x-axis labels
         if ig == 0:
-            axi.set_ylabel(f"Month of {year}")
-            # axi.annotate(f"M{i_run}", xy=[-0.5,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
-            axi.annotate(model_labels[i_run], xy=[-0.5,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+            axi.set_ylabel(f"Month of {year-1-2000}/{year-2000}")
+            axi.annotate(model_labels[i_run], xy=[-0.7,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
         else:
             axi.tick_params(axis='y', labelleft=False, length=4)  # remove y-axis labels
-        if ig == len(glacier_ids)-1:
-            cax = fig.add_subplot(gs[i_run+2, ig+1])
+        if (ig == len(glacier_ids)-1) & (i_run==1):
+            cell = gs[i_run+1, ig+2].subgridspec(1, 3, width_ratios=[0.03, 0.22, 1.1])
+            cax = fig.add_subplot(cell[0, 1])
             cbar = fig.colorbar(im1, cax=cax)
-            cbar.set_label("Speed (m/yr)")
-            # fig.colorbar(im1, ax=axi, label="Surface speed (m/yr)")
+            cbar.set_label("Surface speed (m/yr)")
         if i_run == 0:
-            axi.annotate(gl_name, xy=[0.5,1.1], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+            axi.annotate(gl_name, xy=[0.5,1.13], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
         axi.set_xlim(0,np.max(ds_upglacier)*1e-3)
-        axi.yaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        axi.yaxis.set_major_locator(mdates.MonthLocator(interval=3))
         axi.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
         axi.annotate(f"{idx_to_letter(i_run*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
@@ -344,7 +313,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     # Panel: Observations -- #
     ##########################
 
-    ax3 = fig.add_subplot(gs[4, ig])
+    ax3 = fig.add_subplot(gs[3, ig+1])
 
     # load velocity observations
     files   = glob.glob(vel_dir+"*vv*.tif")
@@ -363,18 +332,19 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     im.set_clim(clims)
     ax3.tick_params(axis='x', labelbottom=False, length=4)  # remove x-axis labels
     if ig == 0:
-        ax3.set_ylabel(f"Month of {year}")
-        ax3.annotate(f"Observed", xy=[-0.5,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+        ax3.set_ylabel(f"Month of {year-1-2000}/{year-2000}")
+        ax3.annotate(f"Observed", xy=[-0.7,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
     else:
         ax3.tick_params(axis='y', labelleft=False, length=4)  # remove y-axis labels
-    if ig == len(glacier_ids)-1:
-        # colorbar in separate subplot axis
-        cax = fig.add_subplot(gs[4, ig+1])
-        cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("Speed (m/yr)")
+    # if ig == len(glacier_ids)-1:
+    #     # colorbar in separate subplot axis
+    #     cell = gs[3, ig+2].subgridspec(1, 3,width_ratios=[0.03, 0.22, 1.1])
+    #     cax = fig.add_subplot(cell[0, 1])
+    #     cbar = fig.colorbar(im, cax=cax)
+    #     cbar.set_label("Speed (m/yr)")
     ax3.set_xlim(0,np.max(ds_upglacier)*1e-3)
     xl = ax3.get_xlim()
-    ax3.yaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    ax3.yaxis.set_major_locator(mdates.MonthLocator(interval=3))
     ax3.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
     ax3.annotate(f"{idx_to_letter(2*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
@@ -392,7 +362,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     ss_topo = np.arange(start=500, stop=profile_stop+2*delta_topo, step=delta_topo)
 
     # distance along flowlines
-    ax4 = fig.add_subplot(gs[5, ig])
+    ax4 = fig.add_subplot(gs[4, ig+1])
     # s0s_avg = (ss_topo[:-1]+ss_topo[1:]) / 2
     # d_along = (s0s_avg - s0s_avg[0] ) / 1e3
     S_profile = np.zeros(len(ss_topo))
@@ -405,19 +375,21 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     line2 = ax4.plot(ss_topo*1e-3, B_profile, label="Bed", color="Black", lw=lw)
     ax4.set_ylim(-180,1350)
     ax4.set_yticks([0, 400, 800, 1200])
-    ax4.set_xlabel("Distance along profile (km)")
+    ax4.set_xticks([10, 20, 30, 40])
+    if ig == 2:
+        ax4.set_xlabel("Distance along profile (km)")
     if ig == 0:
         ax4.set_ylabel("Elevation (m)")
     else:
         ax4.tick_params(axis='y', labelleft=False, length=4)  # remove y-axis labels
-        cax = fig.add_subplot(gs[5, ig+1])
+        cax = fig.add_subplot(gs[4, 0])
         handles = [line1[0], line2[0]]
         labels = [h.get_label() for h in handles]
-        cax.legend(handles=handles, labels=labels, loc=(0.22,0.25), frameon=False)
+        cax.legend(handles=handles, labels=labels, loc=(0.04,0.25), frameon=False, handlelength=1.2)
         cax.axis("off")
     ax4.set_xlim(xl)
     # ax4.set_xlim(-0.5,(profile_stop+ds/2)*1e-3)
-    ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+    ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig+2)}", xy=(0.05,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
             ax4.vlines(x=d_vline*1e-3, ymin=ax4.get_ylim()[0], ymax=ax4.get_ylim()[1], color='cyan', linestyle='-', lw=3)

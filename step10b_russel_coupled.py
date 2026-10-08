@@ -53,7 +53,7 @@ else:  # higher sigma == more smoothing
 # interpolate onto mesh
 B.dat.data[:] = r_bed.interp_points((meshx, meshy), as_array=True)
 H.dat.data[:] = r_thk.interp_points((meshx, meshy), as_array=True)
-S = B.dat.data[:] + H.dat.data[:] # surface elevation
+zS = B.dat.data[:] + H.dat.data[:] # surface elevation
 
 # set minimum ice thickness to 10
 thklim = 0
@@ -89,7 +89,7 @@ Nhat   = df.Constant(917*9.81*H_mean)
 # melt input to hydro model
 f_melt = df.VTKFile(results_dir+"m0_per_year.pvd")
 if args.melt_input == "KAN":
-    m, calc_m = hlp.melt_fct_KAN(hydro, S, data_dir)
+    m, calc_m = hlp.melt_fct_KAN(hydro, zS, data_dir)
 elif args.melt_input == "MAR":
     m, calc_m = hlp.melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler)
 elif args.melt_input == "avg":
@@ -210,6 +210,8 @@ if args.beta2_inversion:
     chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, beta2, results_dir) # beta2 from inversion
 else:
     chk_file, csv_file = initialize(mesh, H, B, Uhat, Nhat, args, args.beta2, results_dir) # all constant
+# chk_file = results_dir + f"initial_fields_russel_coupled_sig{args.sig_topo}.h5"
+# csv_file = results_dir + f"initial_S_russel_coupled_sig{args.sig_topo}.csv"
 with CheckpointFile(chk_file, 'r') as afile:
     mesh_ = afile.load_mesh()
     hydro.set_initial_phi(afile.load_function(mesh_, "phi"))
@@ -247,6 +249,10 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
         try:
             # interpolate spatially resolved surface runoff
             m_CG1.dat.data[:] = calc_m(t) + args.m_basal
+            # m_in = calc_m(t)
+            # m_in[np.where(zS>1400)] *= 0.5
+            # m_in[np.where(zS>1500)] *= 0
+            # m_CG1.dat.data[:] = m_in + args.m_basal
 
             if hydro.moulins:
                 m_DG0.interpolate(m_CG1)
@@ -291,8 +297,6 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
 
             df.solve(coupler.R == 0, coupler.U, bcs=hydro.bcs, solver_parameters=solver_params)
             hydro.update_time_variables()
-            # stokes.u0 = stokes.u
-            # stokes.v0 = stokes.v
             t += dt
             dt_max = get_dt(np.max(m_CG1.dat.data_ro))
             hydro.dt.assign(min(dt*timestep_increase_fraction,dt_max))
@@ -310,8 +314,12 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 S_subDG0 = hlp.save_DGT0(mesh, hydro.S_submesh, df.project(hydro.S,hydro.V_S), hydro.S_save, hydro.outfile_S, t)
                 afile.save_function(S_subDG0, idx=i, name="S")
                 afile.save_function(coupler.U.sub(1), idx=i, name="h")
-                afile.save_function(m_CG1, idx=i, name="m")
                 afile.save_function(df.project(hydro.N, coupler.Q_cg), idx=i, name="N")
+                if hydro.moulins:
+                    afile.save_function(df.project(hydro.Qm, coupler.Q_cg), idx=i, name="Qm")
+                    afile.save_function(df.project(m_CG1*distributed_melt_mask,hydro.V_phi), idx=i, name="m")
+                else:
+                    afile.save_function(m_CG1, idx=i, name="m")
                 i += 1
 
         except df.exceptions.ConvergenceError:

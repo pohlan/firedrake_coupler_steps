@@ -57,13 +57,14 @@ def remove_axes(ax, xlims=(-2.4e5,-0.2e5), ylims=(-2.585e6,-2.47e6)):
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_legend=False):
+def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_legend=False, fontsize=18, y_panellabel=0.9):
     if not (ylims is None):
         ymin, ymax = ylims
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
-    ax.vlines([datetime(2018,1,1), datetime(2019,1,1), datetime(2020,1,1), datetime(2021,1,1), datetime(2022,1,1), datetime(2023,1,1), datetime(2024,1,1)], ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
+    jan_lines = [datetime(yr,1,1) for yr in range(xstart.year+1,xend.year+1)]
+    ax.vlines(jan_lines, ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1]))
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=7))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
@@ -81,13 +82,13 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
         ax.tick_params(axis='y', length=7, width=2)
     # panel annotation
     panel_label = idx_to_letter(panel_idx)
-    ax.annotate(panel_label, xy=(0.03,0.9), xycoords="axes fraction", fontsize=18, fontweight="bold")
+    ax.annotate(panel_label, xy=(0.03,y_panellabel), xycoords="axes fraction", fontsize=fontsize, fontweight="bold")
 
-def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, ylims):
+def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, ylims, fs):
     # observations, plot only if the ax is empty still to avoid re-doing it several times
     if len(ax1.lines) == 0:
         obs_mean = np.mean(np.array(Uobs)[np.where(np.isfinite(Uobs))])
-        ax1.plot(obs_dates, Uobs-obs_mean, label=f"Observations", color="black", lw=lw, ls="dashed", marker="o", markersize=5)
+        ax1.plot(obs_dates, Uobs-obs_mean, label=f"Observations", color="black", lw=lw, ls="dashed", marker="o", markersize=7)
         # ax1.plot(sorted_dates, Uobs_time, label=f"Observations", color="black", lw=lw, ls="dashed", marker="o", markersize=5)
 
     # model
@@ -105,7 +106,7 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
 
     # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    format_ax(ax1, xstart, xend, ig, panel_idx=ig, ylims=ylims, ylabel=r"Speed rel. to mean ($\mathrm{m^3\,a^{-1}}$)")
+    format_ax(ax1, xstart, xend, ig, panel_idx=ig, ylims=ylims, ylabel=r"Speed rel. to mean ($\mathrm{m\,a^{-1}}$)", fontsize=fs)
     # format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
 
     # melt input, also only plot once the first time
@@ -205,7 +206,7 @@ def plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices, var1, var2, xstart, 
     else:
         l2 = param_labels[var2]+" ("+ param_units[var2] +")"
     if legend:
-        ax.legend(title=l2, loc=labelloc)
+        ax.legend(title=l2, loc=labelloc, handlelength=1.2, fontsize=annotate_fs*0.9, title_fontsize=annotate_fs*0.9)
     ax.set_xlabel(l1)
     ax.set_ylabel(r"$\Delta u$ ($\mathrm{m\,a^{-1}}$)")
     ax.set_xscale(xscale)
@@ -216,11 +217,15 @@ def plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices, var1, var2, xstart, 
         ax.set_ylim(ylims)
     y0, y1 = ax.get_ylim()
     x0, x1 = ax.get_xlim()
-    if xscale == "log":
-        xannotate = np.exp(np.log(x0) + 0.46*(np.log(x1)-np.log(x0)))
+    if y1 > 4:
+        x_shift = 0.56
     else:
-        xannotate = x0+0.46*(x1-x0)
-    ax.annotate("Observed", xy=(xannotate, slope+2*slope_err+0.02*(y1-y0)), fontsize=annotate_fs * 0.9, annotation_clip=False)
+        x_shift = 0.16
+    if xscale == "log":
+        xannotate = np.exp(np.log(x0) + x_shift*(np.log(x1)-np.log(x0)))
+    else:
+        xannotate = x0+x_shift*(x1-x0)
+    ax.annotate("Observed", xy=(xannotate, slope-2*slope_err-0.02*(y1-y0)), fontsize=annotate_fs, annotation_clip=False, va="top")
 
 
 def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, var, xstart, xend, xstart_plot, xend_plot, xc, yc, cols, ii, param_units, param_labels,
@@ -243,10 +248,10 @@ def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, var, xstart, xend, xs
         y0, y1 = ylims
     else:
         y0, y1 = ax.get_ylim()
-    ax.fill_betweenx([y0, y1], xstart, xend, alpha=0.15, facecolor="cornflowerblue")
+    ax.fill_betweenx([y0, y1], xstart, xend, alpha=0.1, facecolor="cadetblue")
     ax.set_xlabel("Month of 2020/2021")
     ax.set_ylabel(r"Speed rel. to mean ($\mathrm{m\,a^{-1}}$)")
-    ax.legend()
+    ax.legend(handlelength=1.2, fontsize=annotate_fs*0.9)
     if ylims is not None:
         ax.set_ylim(ylims)
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))

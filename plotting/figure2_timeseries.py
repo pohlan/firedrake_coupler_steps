@@ -18,32 +18,37 @@ fig_mode = ["main","supp"][0]
 # profile width, which runs and glaciers to plot
 profile_width = 4.5e3
 deltas_upglacier = [500,500,500,500]
+wspace_size = 0.05
 if fig_mode == "main":
     ds_upglacier = [10e3,35e3,10e3,16e3]
     glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Isorlersuup"]
-    width_ratios = [6, 6, 0.2, 6, 0.2, 6, 1]
+    width_ratios = [6, 6, wspace_size, 6, wspace_size, 6]
     title_bar_lengths = [2,1,1]
-    pw_lims = (-0.35,1.1)
-    y_Jan_annot = -0.3
-    speed_lims = (-80,140)
+    pw_lims = (-0.3,0.98)
+    y_Jan_annot = -0.25
+    speed_lims = (-60,130)
     figname = "f02"
 else:
     ds_upglacier = [10e3,30e3,10e3,30e3]
     glacier_names = ["Ørkendalen", "Ørkendalen", "Glacier 5", "Glacier 5"]
-    width_ratios = [6, 6, 0.2, 6, 0.0, 6, 1]
+    width_ratios = [6, 6, wspace_size, 6, 0.0, 6, 1]
     title_bar_lengths = [2,3]
-    pw_lims = (-1.2,1.1)
+    pw_lims = (-1.2,0.98)
     y_Jan_annot = 0.4
     speed_lims = (-120,140)
     figname = "fS02"
 
 n_glaciers = len(glacier_names)
 run_indices = [314,478]
-model_start_years = [2014,2014]
 model_labels = ["Baseline", "Reduced \nsheet flow"]
+model_start_years = [2014,2014]
+# model_labels = ["Larger domain", "Reduced \nsheet flow"]
+# model_labels = ["Reduced \nsheet flow", "With moulins"]
+# model_labels = ["Reduced \nsheet flow", r"Locally increased \n$k_s$"]
 
 # time period to plot
-xstart,xend = datetime(2019,1,2),datetime(2023,12,30)
+xstart,xend = datetime(2019,1,2),datetime(2022,12,30)
+# xstart,xend = datetime(2015,1,2),datetime(2019,12,30)
 
 # load glacier flowline coordinates and distances along profile
 x_points = []
@@ -67,24 +72,29 @@ Uobs_glaciers = load_obs_timeseries(obs_files, x_points, y_points)
 
 # plotting parameters
 colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
+# colors = ["peru","cornflowerblue"]        # smaller domain
+# colors = ["indianred","cornflowerblue"]   # larger domain
+# colors = ["cornflowerblue","yellowgreen"] # moulin run
+# colors = ["cornflowerblue","palevioletred"] # locally increased k_s
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
-plt.rcParams['font.size'] = 18
-lw = 2.5
-annotate_fs = 18
+plt.rcParams['font.size'] = 30
+lw = 3.5
+annotate_fs = 30
 
 # prepare figure, gridspecs
-fig = plt.figure(figsize=(n_glaciers*7,13))
-gs = fig.add_gridspec(5, n_glaciers+3, left=0.05, right=0.93, top=0.95, bottom=0.1, hspace=0.0, wspace=0.1, width_ratios=width_ratios, height_ratios=[2,2,10,10,10])
+fig = plt.figure(figsize=(n_glaciers*7,16))
+gs = fig.add_gridspec(6, n_glaciers+2, left=0.065, right=0.955, top=0.99, bottom=0.0, hspace=0.0, wspace=0.07, width_ratios=width_ratios, height_ratios=[2,2,10,7,7,6])
 axes = np.array([[fig.add_subplot(gs[j, i]) for i in [0,1,3,5]] for j in range(2,5)])
 
 # set title for the two glaciers, group the columns
 i0=0
-for (i,(glacier_name,l_title)) in enumerate(zip(np.unique(glacier_names),title_bar_lengths)):
+unique_gl_names = np.array(glacier_names)[np.sort(np.unique(glacier_names, return_index=True)[1])]  # np.unique() itself changes order, need stuff around to preserve it
+for (i,(glacier_name,l_title)) in enumerate(zip(unique_gl_names,title_bar_lengths)):
     topax = fig.add_subplot(gs[0, i0:i0+l_title])
     topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
     topax.set_xlim(0,1)
     topax.axis("off")
-    topax.annotate(glacier_name, xy=[0.5,0.5], fontsize=annotate_fs*1.3, fontweight="bold", ha="center", va="center")
+    topax.annotate(glacier_name, xy=[0.5,0.5], fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
     i0 += l_title+1
 
 for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_labels, model_start_years):
@@ -106,14 +116,14 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         ax1 = axes[0,ig]
         U_model = load_model_timeseries(mesh_, us_raw, [xc], [yc], i_model)
         m_time  = load_model_timeseries(mesh_, m_raw, [xc], [yc], i_model)[:,0]
-        plot_vel_timeseries(dates_model, U_model, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, speed_lims)
+        plot_vel_timeseries(dates_model, U_model, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, speed_lims, fs=annotate_fs*0.9)
         if ig > 0:
             ax1.set_ylabel("")
         ax1.set_xlabel("")
         ax1.set_xticks([])
 
         # annotations for distance along profile
-        ax1.annotate(f"{int(d_along_profile*1e-3)} km", xy=[0.5,1.1], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+        ax1.annotate(f"{int(d_along_profile*1e-3)} km", xy=[0.5,1.1], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs*0.9, fontweight="bold", ha="center", va="center")
 
         # plot Pw / Pi time series
         ax2 = axes[1, ig]
@@ -122,18 +132,18 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         # df_PwPi = pd.DataFrame(Pw_Pi, index=dates_model_pd)
         # Pw_Pi_resampled = df_PwPi.resample('10D').mean()
         ax2.plot(dates_model, Pw_Pi, label=model_label, lw=lw, color=color)
-        format_ax(ax2, xstart, xend, ig, panel_idx=4+ig, ylims=pw_lims, ylabel=r"$p_w / p_i$" if ig == 0 else "")
+        format_ax(ax2, xstart, xend, ig, panel_idx=4+ig, ylims=pw_lims, ylabel=r"$p_w / p_i$" if ig == 0 else "", fontsize=annotate_fs*0.9, y_panellabel=6/7)
         ax2.set_xlabel("")
         ax2.set_xticks([])
         # legend outside of plots, in separate axis
         if (run_index == run_indices[-1]) & (ig==n_glaciers-1):
-            lax = fig.add_subplot(gs[3, 6])
+            lax = fig.add_subplot(gs[5, 0])
             lines = ax1.get_lines()  # ax1 so that observations are in there too
             labels = [h.get_label() for h in lines]
-            lax.legend(handles=lines, labels=labels, loc=(-0.05,0.2), frameon=False)
+            lax.legend(handles=lines, labels=labels, loc=(0.25,0.2), frameon=False, handlelength=1.5, ncols=3)
             lax.axis("off")
         if (run_index == run_indices[-1]) & (ig==0):
-            ax2.annotate("January", xy=[datetime(2020,2,1),y_Jan_annot], rotation=90)
+            ax2.annotate("January", xy=[datetime(2020,2,1),y_Jan_annot], rotation=90, fontsize=annotate_fs*0.9)
 
         # plot discharges q and Q
         ax3 = axes[2, ig]
@@ -155,12 +165,12 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         ymin = min(np.min(q),np.min(Q))
         ymax = max(np.max(q),np.max(Q))
         ax3.set_yscale("log")
-        format_ax(ax3, xstart, xend, ig, panel_idx=2*4+ig, ylims=(5e-7,1000), ylabel=r"Discharge ($\mathrm{m^3\,s^{-1}}$)" if ig == 0 else "", draw_legend=False)
+        format_ax(ax3, xstart, xend, ig, panel_idx=2*4+ig, ylims=(1e-6,1000), ylabel=r"Discharge ($\mathrm{m^3\,s^{-1}}$)" if ig == 0 else "", draw_legend=False, fontsize=annotate_fs*0.9, y_panellabel=6/7)
         if (run_index == run_indices[-1]) & (ig==n_glaciers-1):
-            lax = fig.add_subplot(gs[4, 6])
+            lax = fig.add_subplot(gs[5, 3])
             lax.plot([], [], color='grey', linestyle="dashed", label=r"$Q$"+" (channels)")
             lax.plot([], [], color='grey', linestyle="solid", label=r"$q$"+" (sheets)")
-            lax.legend(loc=(-0.05,0.4), title="Discharge", frameon=False)
+            lax.legend(loc=(0.4,0.0), title="Discharge", frameon=False, handlelength=1.5)
             lax.axis("off")
 
 # Share y-axis for all velocity plots (first row)

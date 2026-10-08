@@ -10,8 +10,9 @@ import matplotlib.dates as mdates
 from firedrake.pyplot import tripcolor
 import pandas as pd
 
-run_indices_maps = [314, 478]
-model_labels = ["Baseline", "Reduced sheet flow"]
+run_indices_maps = [314,478,656]
+hr = hlp.get_params_from_input_file(run_indices_maps[2])["h_r"]
+model_labels = ["Baseline", "Reduced sheet flow", "Large bed bump "+rf"$h_r={int(hr)}\,\mathrm{{m}}$"]
 year0 = 2020
 xstart_winter, xend_winter = datetime(year0,10,1), datetime(year0+1,4,30)
 xstart_plot, xend_plot = datetime(year0, 5, 1), datetime(year0+1, 6, 20)
@@ -23,10 +24,10 @@ cols    = ["magenta", "saddlebrown"]
 
 # plotting parameters
 vm = 6
-plt.rcParams['font.size'] = 20
-annotate_fs = 23
+plt.rcParams['font.size'] = 24
+annotate_fs = 24
 marker_size = 115
-colors = plt.cm.viridis(np.linspace(0.1, 0.9, 5))
+colors = plt.cm.berlin(np.linspace(0.1, 0.9, 5))
 
 # paths
 timeseries_path = f"parameter_runs/run_{run_indices_maps[0]}/time_series.h5"
@@ -53,7 +54,7 @@ def get_model_winter_speedup_field(mesh_, run_index, B, xstart, xend, start_year
     return U_diff
 
 
-def plot_model_panel(ax, fig, gs_top, ii, mesh_, run_index, model_label, B, gdf, vm, annotate_fs, xstart, xend, xcoords, ycoords, cols):
+def plot_model_panel(ax, fig, gs, ii, mesh_, run_index, model_label, B, gdf, vm, annotate_fs, xstart, xend, xcoords, ycoords, cols):
     U_diff = get_model_winter_speedup_field(mesh_, run_index, B, xstart, xend, start_year=2014)
     cl = tripcolor(U_diff, axes=ax, vmin=-vm, vmax=vm, cmap="BrBG")
     ax.scatter(xcoords, ycoords, marker_size, color="black", marker="x")
@@ -61,16 +62,24 @@ def plot_model_panel(ax, fig, gs_top, ii, mesh_, run_index, model_label, B, gdf,
     ax.annotate("B", xy=(xcoords[1]+1e4,ycoords[1]), ha="center", va="center", fontsize=annotate_fs*0.9, fontweight="bold")
 
     if ii == 1:
-        cax = fig.add_subplot(gs_top[0, 3])
-        fig.colorbar(cl, ax=cax, label="Monthly winter speed \nincrease " + r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
-        remove_axes(cax)
+        cax = fig.add_subplot(gs[-1,0])
+        fig.colorbar(cl, cax=cax, label="Monthly winter speed \nincrease " + r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
+        # manually define position and size of colorbar
+        pos = cax.get_position()
+        cax.set_position([
+            pos.x0 + 0.45 * pos.width,
+            pos.y0 + 0.15 * pos.height,
+            0.06*pos.width,
+            0.7*pos.height
+        ])
+        # remove_axes(cax)
 
     remove_axes(ax)
     ax.set_title(model_label, fontsize=annotate_fs, fontweight="bold")
     panel_letter_annotation(ax, ii+1, annotate_fs)
     gdf.plot(ax=ax, facecolor="none", edgecolor="black", linewidth=1, label="Domain")
     ax.vlines(x0, ax.get_ylim()[0]+2.4e4, ax.get_ylim()[1]+1e4, color="grey", lw=4, ls="dotted")
-    ax.annotate("Fig. 5 \ncross-section", xy=(x0+0.5e4, ax.get_ylim()[0]), fontsize=annotate_fs, ha="center")
+    ax.annotate("Fig. 5 \nflux gate", xy=(x0+0.5e4, ax.get_ylim()[0]-3e3), fontsize=annotate_fs, ha="center", annotation_clip=False)
 
 
 param_labels = {"k_s": r"$k_s$", "h_r": r"$h_r$", "m_basal": r"$m_\mathrm{basal}$"}
@@ -121,14 +130,17 @@ mask_noglacier   = ~domain_outline.create_mask(raster0)
 dU_obs[mask_noglacier.data.ravel()] = np.nan
 
 
-fig = plt.figure(figsize=(30, 20))
-gs  = fig.add_gridspec(5, 1, left=0.01, right=0.99, top=0.92, bottom=0.06, height_ratios=[0.85,0.12,1,0.1,1])
+fig = plt.figure(figsize=(22, 25))
+h_banner = 0.14
+hgap = 0.09
+gs  = fig.add_gridspec(9, 3, left=0.01, right=0.99, top=0.99, bottom=0.04, hspace=0.2, wspace=0.23, height_ratios=[h_banner,1,hgap,1,hgap*1.6,h_banner,1,hgap,1], width_ratios=[1,1,1])
 
-gs_top = gs[0].subgridspec(1, 5, hspace=0.0, wspace=0.04, width_ratios=[1,1,1,0.15,0.2])
-ax = fig.add_subplot(gs_top[0,0])
-ax2 = fig.add_subplot(gs_top[0,1])
-ax3 = fig.add_subplot(gs_top[0,2])
-
+hgap_left = hgap*1.3
+gs_left = gs[:,0].subgridspec(8, 1, hspace=-0.07, height_ratios=[1,1,hgap_left,1,hgap_left,1,hgap_left,0.7])
+ax = fig.add_subplot(gs_left[0])
+ax2 = fig.add_subplot(gs_left[1])
+ax3 = fig.add_subplot(gs_left[3])
+ax4 = fig.add_subplot(gs_left[5])
 
 im = ax.pcolormesh(x,np.flip(y), map, vmin=-vm, vmax=vm, cmap="BrBG") #, cmap='viridis')
 ax.scatter(xcoords, ycoords, marker_size, color="black", marker="x")
@@ -148,28 +160,28 @@ gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=1, label='Domain'
 
 B, H, S = load_topography(mesh_)
 
-for ii, (run_index, ax_model, model_label) in enumerate(zip(run_indices_maps, [ax2, ax3], model_labels)):
-    plot_model_panel(ax_model, fig, gs_top, ii, mesh_, run_index, model_label, B, gdf, vm, annotate_fs, xstart_winter, xend_winter, xcoords, ycoords, cols)
+for ii, (run_index, ax_model, model_label) in enumerate(zip(run_indices_maps, [ax2, ax3, ax4], model_labels)):
+    plot_model_panel(ax_model, fig, gs_left, ii, mesh_, run_index, model_label, B, gdf, vm, annotate_fs, xstart_winter, xend_winter, xcoords, ycoords, cols)
 
 
 ##################
 # A and B titles #
 ##################
 
-gs_mid = gs[1].subgridspec(1,8, wspace=0, width_ratios=[0.2,1,0.3,1,0.35,1,0.3,1])
+# gs_mid = gs[0,1:].subgridspec(1,8, wspace=0, width_ratios=[0.2,1,0.3,1,0.35,1,0.3,1])
 
-topax = fig.add_subplot(gs_mid[0, 1:4])
+topax = fig.add_subplot(gs[0, 1:])
 topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
 topax.set_xlim(0,1)
 topax.axis("off")
-topax.annotate("A", xy=[0.5,0.4], fontsize=annotate_fs*1.3, fontweight="bold", ha="center", va="center")
+topax.annotate("A", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
 
 
-topax = fig.add_subplot(gs_mid[0, 5:8])
+topax = fig.add_subplot(gs[5, 1:])
 topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
 topax.set_xlim(0,1)
 topax.axis("off")
-topax.annotate("B", xy=[0.5,0.4], fontsize=annotate_fs*1.1, fontweight="bold", ha="center", va="center")
+topax.annotate("B", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
 
 
 ######################
@@ -179,50 +191,52 @@ topax.annotate("B", xy=[0.5,0.4], fontsize=annotate_fs*1.1, fontweight="bold", h
 run_indices_suit = range(601,633)
 run_indices_timeseries = [622, 602]
 
-gs_bot = gs[2].subgridspec(1, 8, wspace=0, width_ratios=[0.2,1,0.3,1,0.35,1,0.3,1])
+# gs_bot = gs[2].subgridspec(1, 8, wspace=0, width_ratios=[0.2,1,0.3,1,0.35,1,0.3,1])
 
-ax = fig.add_subplot(gs_bot[0, 1])
-plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]], colors, 3,
-                       param_units, param_labels)
+ax = fig.add_subplot(gs[1, 1])
+plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]], colors, 4,
+                       param_units, param_labels, annotate_fs=annotate_fs, legend=False)
+ylims_A = ax.get_ylim()
 
-ax_A = fig.add_subplot(gs_bot[0, 3])
-plot_timeseries_panel(ax_A, mesh_, vel_dir, run_indices_timeseries, "k_s", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[0]]], [[ycoords[0]]], cols, 4,
-                      param_units, param_labels)
+ax_A = fig.add_subplot(gs[1, 2])
+plot_timeseries_panel(ax_A, mesh_, vel_dir, run_indices_timeseries, "k_s", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[0]]], [[ycoords[0]]], cols, 5,
+                      param_units, param_labels, annotate_fs=annotate_fs)
 
-ax = fig.add_subplot(gs_bot[0, 5])
-plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]], colors, 5,
-                       param_units, param_labels, labelloc=(0.02,0.36))
+ax = fig.add_subplot(gs[6, 1])
+plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]], colors, 8,
+                       param_units, param_labels, labelloc=(0.02,0.36), annotate_fs=annotate_fs, legend=False, obs_note="left")
+ylims_B = ax.get_ylim()
 
-ax_B = fig.add_subplot(gs_bot[0, 7])
-plot_timeseries_panel(ax_B, mesh_, vel_dir, run_indices_timeseries, "k_s", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[1]]], [[ycoords[1]]], cols, 6,
-                      param_units, param_labels)
+ax_B = fig.add_subplot(gs[6, 2])
+plot_timeseries_panel(ax_B, mesh_, vel_dir, run_indices_timeseries, "k_s", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[1]]], [[ycoords[1]]], cols, 9,
+                      param_units, param_labels, annotate_fs=annotate_fs)
 
 
 
-######################
-# Sensitivity to h_r #
-######################
+# ######################
+# # Sensitivity to h_r #
+# ######################
 
 run_indices_suit = range(633,673)
 run_indices_timeseries = [656, 650]
 
-gs_bot = gs[4].subgridspec(1, 8, wspace=0, width_ratios=[0.2,1,0.3,1,0.35,1,0.3,1])
+# gs_bot = gs[4].subgridspec(1, 8, wspace=0, width_ratios=[0.2,1,0.3,1,0.35,1,0.3,1])
 
-ax = fig.add_subplot(gs_bot[0, 1])
-plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "h_r", "m_basal", xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]], colors, 7,
-                       param_units, param_labels, xscale="linear")
+ax = fig.add_subplot(gs[3, 1])
+plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "h_r", "m_basal", xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]], colors, 6,
+                       param_units, param_labels, xscale="linear", annotate_fs=annotate_fs, ylims=ylims_A, legend=True)
 
-ax = fig.add_subplot(gs_bot[0, 3])
-plot_timeseries_panel(ax, mesh_, vel_dir, run_indices_timeseries, "h_r", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[0]]], [[ycoords[0]]], cols, 8,
-                      param_units, param_labels, ylims=ax_A.get_ylim())
+ax = fig.add_subplot(gs[3, 2])
+plot_timeseries_panel(ax, mesh_, vel_dir, run_indices_timeseries, "h_r", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[0]]], [[ycoords[0]]], cols, 7,
+                      param_units, param_labels, ylims=ax_A.get_ylim(), annotate_fs=annotate_fs)
 
-ax = fig.add_subplot(gs_bot[0, 5])
-plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "h_r", "m_basal", xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]], colors, 9,
-                       param_units, param_labels, labelloc="lower right", xscale="linear")
+ax = fig.add_subplot(gs[8, 1])
+plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices_suit, "h_r", "m_basal", xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]], colors, 10,
+                       param_units, param_labels, labelloc="lower right", xscale="linear", annotate_fs=annotate_fs, ylims=ylims_B, legend=False, obs_note="left")
 
-ax = fig.add_subplot(gs_bot[0, 7])
-plot_timeseries_panel(ax, mesh_, vel_dir, run_indices_timeseries, "h_r", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[1]]], [[ycoords[1]]], cols, 10,
-                      param_units, param_labels, ylims=ax_B.get_ylim())
+ax = fig.add_subplot(gs[8, 2])
+plot_timeseries_panel(ax, mesh_, vel_dir, run_indices_timeseries, "h_r", xstart_winter, xend_winter, xstart_plot, xend_plot, [[xcoords[1]]], [[ycoords[1]]], cols, 11,
+                      param_units, param_labels, ylims=ax_B.get_ylim(), annotate_fs=annotate_fs)
 
 
 

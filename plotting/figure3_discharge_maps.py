@@ -14,7 +14,9 @@ import cmcrameri.cm as cmc
 import matplotlib.colors as colors
 
 run_indices = [314,478]
-model_labels  = ["Baseline", "Reduced \nsheet flow"]
+model_labels  = ["Baseline", "Reduced\nsheet flow"]
+# run_indices = [479,478]
+# model_labels  = ["Smaller catchment", "Reduced \nsheet flow"]
 Q_min     = 10
 # vmax = 5e10
 
@@ -23,17 +25,12 @@ outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 vel_dir = "Greenland_data/velocity/monthly/"
 
 # plotting parameters
-plt.rcParams['font.size'] = 28
-annotate_fs = 28
-
-# load model input independent of run
-timeseries_path = f"parameter_runs/run_{run_indices[0]}/time_series.h5"
-mesh_, smesh_ = get_meshes(timeseries_path)
-coords = smesh_.coordinates.dat.data  # mesh coordinates
-B, H, S = load_topography(mesh_, sig=5)
+plt.rcParams['font.size'] = 33
+annotate_fs = 33
 
 
-def get_Q_lines(Q_vals, ax, cax):
+
+def get_Q_lines(Q_vals, ax, cax, coords):
     # Get cell-vertex connectivity using CG function space
     V_CG = df.FunctionSpace(smesh_, "CG", 1)
     cells = V_CG.cell_node_list
@@ -66,23 +63,28 @@ def get_Q_lines(Q_vals, ax, cax):
                         #    norm=plt.Normalize(vmin=np.nanmin(Q_vals)*(1), vmax=Q_min))
     lc.set_array(np.array(colors))
     lc.set_linewidth(3)
-    cbar = fig.colorbar(lc, ax=cax)
-    cbar.set_label(r"$Q\,(\mathrm{m^3 s^{-1}})$")
+    cbar = fig.colorbar(lc, cax=cax, label=r"$Q\,(\mathrm{m^3 s^{-1}})$")
+    # manually define position and size of colorbar
+    pos = cax.get_position()
+    cax.set_position([
+        pos.x0 + 0.2 * pos.width,
+        pos.y0 + 0.25 * pos.height,
+        0.2*pos.width,
+        0.5*pos.height
+    ])
 
     return lc
 
-    # remove spines (box around plot)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
 # Create figure and plot
 fig = plt.figure(figsize=(30, 14))
-gs = fig.add_gridspec(2, 3, left=0.12, right=0.93, top=0.92, bottom=0, hspace=0.0, wspace=0.1, width_ratios=[1,1,0.12], height_ratios=[1,1])
+gs = fig.add_gridspec(2, 3, left=0.075, right=0.97, top=0.95, bottom=0.0, hspace=-0.1, wspace=0, width_ratios=[1,1,0.12], height_ratios=[1,1])
 
 
 for (i_r,run_index) in enumerate(run_indices):
     # load model output
     timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
+    mesh_, smesh_ = get_meshes(timeseries_path)
+    coords = smesh_.coordinates.dat.data  # mesh coordinates
     us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, _, n_idx, _ = load_model_output(timeseries_path)
     for (i_s,season) in enumerate(["July 2020", "January 2021"]):
         idx = {'January 2021': int(7.05*365/2), 'July 2020': int(6.53*365/2)}[season]
@@ -102,7 +104,16 @@ for (i_r,run_index) in enumerate(run_indices):
 
         cl = tripcolor(q, axes=ax, cmap=cmc.lapaz, norm=colors.LogNorm(vmin=1e-5, vmax=0.1))
         cax1 = fig.add_subplot(gs[0, 2])
-        cbar = fig.colorbar(cl, ax=cax1, label=r"$q\,(\mathrm{m^2 s^{-1}})$")
+        cbar = fig.colorbar(cl, cax=cax1, label=r"$q\,(\mathrm{m^2 s^{-1}})$") # cax= ... not ax=... !
+
+        # manually define position and size of colorbar
+        pos = cax1.get_position()
+        cax1.set_position([
+            pos.x0 + 0.2 * pos.width,
+            pos.y0 + 0.25 * pos.height,
+            0.2*pos.width,
+            0.5*pos.height
+        ])
 
         # domain outline
         gdf = gpd.read_file(outline_path)
@@ -113,18 +124,16 @@ for (i_r,run_index) in enumerate(run_indices):
         Q_vals[np.where(Q_vals<Q_min)] = np.nan
 
         cax2 = fig.add_subplot(gs[1, 2])
-        lc = get_Q_lines(Q_vals, ax, cax2)
+        lc = get_Q_lines(Q_vals, ax, cax2, coords)
         ax.add_collection(lc)
 
         remove_axes(ax)
-        remove_axes(cax1)
-        remove_axes(cax2)
 
         if i_s == 0:
             model_label = model_labels[i_r]
-            ax.annotate(model_label, xy=[-0.15,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+            ax.annotate(model_label, xy=[-0.17, 0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", va="center")
         if i_r == 0:
-            ax.annotate(season, xy=[0.5,1.1], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+            ax.annotate(season, xy=[0.5,1.05], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
         ax.annotate(f"{idx_to_letter(i_r*2+i_s)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.9, fontweight="bold")
 
 
@@ -148,5 +157,5 @@ for (i_r,run_index) in enumerate(run_indices):
 # plt.scatter(marker_x, marker_y, 210, c=colors, edgecolors="black", linewidths=1)
 
 plt.tight_layout()
-plt.savefig("plotting/main_figures/f03.jpg")
-plt.savefig(f"plotting/output_heatmap/Q_map_{run_indices[0]}_{run_indices[1]}_q.png", dpi=150)
+# plt.savefig(f"plotting/main_figures/fS03b_{run_indices[0]}.jpg")
+plt.savefig(f"plotting/main_figures/f03.jpg")

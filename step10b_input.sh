@@ -60,15 +60,15 @@ t_end=$t_end
 EOF
 
 # run the model for 5 years, basis for beta2 inversion
-t_end_0=5
-options="--t_end $t_end_0 --e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha_s $alpha_s --beta_s $beta_s --omega $omega --As_factor $As_factor --sig_topo $sig_topo --m_basal $m_basal --melt_input $melt_input"
-if [ "$transition" = true ]; then
-  options="$options --transition"
-fi
-if [ "$moulins" = true ]; then
-  options="$options --moulins"
-fi
-python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt
+# t_end_0=5
+# options="--t_end $t_end_0 --e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha_s $alpha_s --beta_s $beta_s --omega $omega --As_factor $As_factor --sig_topo $sig_topo --m_basal $m_basal --melt_input $melt_input"
+# if [ "$transition" = true ]; then
+#   options="$options --transition"
+# fi
+# if [ "$moulins" = true ]; then
+#   options="$options --moulins"
+# fi
+# python -u step10b_russel_coupled.py $options > parameter_runs/log_run0_$run_index.txt
 
 # run the model with inverted beta2, for longer
 options="--t_end $t_end --e_v $e_v --l_r $l_r --h_r $h_r --k_s $k_s --k_c $k_c --l_c $l_c --beta2 $beta2 --p $p --q $q --run_index $run_index --alpha_s $alpha_s --beta_s $beta_s --omega $omega --As_factor $As_factor --sig_topo $sig_topo --m_basal $m_basal --melt_input $melt_input"
@@ -80,6 +80,7 @@ if [ "$moulins" = true ]; then
 fi
 if [ "$beta2_inversion" = true ]; then
   options="$options --beta2_inversion"
-  python -u step12b_inversion.py $options
-  python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt
+  # python -u step12b_inversion.py $options > parameter_runs/log_run_inversion_$run_index.txt
+  # python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt
 fi
+python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt

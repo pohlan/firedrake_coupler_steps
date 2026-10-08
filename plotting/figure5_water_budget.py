@@ -23,7 +23,7 @@ x0 = 0.5*xcoords[0] + 0.5*xcoords[1]
 run_indices_suit = list(range(601,673))
 m_b_0 = 0.02
 run_indices = [314,478,656]
-model_labels  = ["Baseline", "Reduced sheet \nflow", r"$h_r=8$ m", "any", "any"]
+model_labels  = ["Baseline", "Reduced sheet \nflow", "Large bed bump", "any", "any"]
 cols = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 
 xstart, xend = datetime(2020,4,1),datetime(2021,6,1)
@@ -36,10 +36,10 @@ gdf = gpd.read_file(outline_path)
 vel_dir = "Greenland_data/velocity/monthly/"
 
 # plotting parameters
-plt.rcParams['font.size'] = 19
-annotate_fs = 24
-lw = 2.5
-markersz = 30
+plt.rcParams['font.size'] = 25
+annotate_fs = 25
+lw = 3
+markersz = 40
 
 # load model input independent of run
 timeseries_path = f"parameter_runs/run_477/time_series.h5"
@@ -47,19 +47,20 @@ mesh_, smesh_ = get_meshes(timeseries_path)
 coords = smesh_.coordinates.dat.data  # mesh coordinates
 B, H, S = load_topography(mesh_, sig=5)
 
-fig = plt.figure(figsize=(26, 10))
-gs  = fig.add_gridspec(3, 5, left=0.07, right=0.97, hspace=0.05, top=0.9, bottom=0.1, width_ratios=[1,0.01,0.6,0.03,0.6], height_ratios=[1,0.4,1])
+fig = plt.figure(figsize=(16, 20))
+# gs  = fig.add_gridspec(3, 5, left=0.07, right=0.97, hspace=0.05, top=0.9, bottom=0.1, width_ratios=[1,0.01,0.6,0.03,0.6], height_ratios=[1,0.4,1])
+gs  = fig.add_gridspec(5, 4, left=0.07, right=1.0, hspace=0.0, top=0.97, bottom=0.055, width_ratios=[1,0.05,1,0.6], height_ratios=[2.5,0.7,1,0.65,1])
 
-# gs_top = gs[0].subgridspec(1, 5, hspace=0.0, wspace=0.04, )
-ax1 = fig.add_subplot(gs[0,0])
-ax2 = fig.add_subplot(gs[2,0])
-ax3 = fig.add_subplot(gs[0,2])
+gs_top = gs[0,:].subgridspec(2, 3, hspace=0.3, wspace=0.0, width_ratios=[0.1,1,0.6])
+ax1 = fig.add_subplot(gs_top[0,1])
+ax2 = fig.add_subplot(gs_top[1,1])
+ax3 = fig.add_subplot(gs[2,0])
 ax4 = fig.add_subplot(gs[2,2])
-ax5 = fig.add_subplot(gs[0,4])
-ax6 = fig.add_subplot(gs[2,4])
+ax5 = fig.add_subplot(gs[4,0])
+ax6 = fig.add_subplot(gs[4,2])
 
 # inset for cross-section
-ax_inset = ax1.inset_axes([0.02, 0.5, 0.21, 0.5])
+ax_inset = ax1.inset_axes([0.45, 0.49, 0.4, 0.5])
 gdf.plot(ax=ax_inset, facecolor="none", edgecolor="black", linewidth=1)
 ax_inset.vlines(x0, ax_inset.get_ylim()[0]+1e4, ax_inset.get_ylim()[1]+1e4, color="grey")
 ax_inset.axis("off")
@@ -79,13 +80,35 @@ gdf_filtered = gdf_filtered[~gdf_filtered.is_empty]
 gdf_filtered.plot(ax=ax_inset, facecolor="none", edgecolor="black", hatch="///", alpha=0.7)
 
 
-# legend with dummy plots
-lax = fig.add_subplot(gs[1, 0])
-lax.plot([], [], color='grey', linestyle="solid", label=r"Sheets", lw=lw)
+# legend with dummy plots, first for total vs channels
+lax = fig.add_subplot(gs_top[0, 2])
+lax.plot([], [], color='grey', linestyle="solid", label="Total \n(sheets+channels)", lw=lw)
 lax.plot([], [], color='grey', linestyle="dashed", label=r"Channels", lw=lw)
-lax.plot([], [], color='grey', linestyle="dashdot", label=r"Sheets+channels", lw=lw)
-lax.legend(loc=(0.1,0.2), frameon=False, ncol=3)
+# lax.plot([], [], color='grey', linestyle="dashdot", label=r"Sheets", lw=lw)
+lax.legend(loc=(0.15,0.4), frameon=False, handlelength=1.4)
 lax.axis("off")
+
+# legend different colors (different model runs)
+lax = fig.add_subplot(gs_top[1, 2])
+lax.plot([], [], color='black', linestyle="dotted", label="Meltwater", lw=lw)
+lax.plot([], [], color=cols[0], linestyle="solid", label=model_labels[0], lw=lw)
+lax.plot([], [], color=cols[1], linestyle="solid", label=model_labels[1], lw=lw)
+lax.plot([], [], color=cols[2], linestyle="solid", label=model_labels[2], lw=lw)
+lax.axis("off")
+# add separate legend between panels
+handles, labels = lax.get_legend_handles_labels()
+# split into first items and last two items
+handles_first = [handles[0]]
+labels_first = [labels[0]]
+handles_last = handles[1:]
+labels_last = labels[1:]
+# add first legend (no title)
+first_legend = lax.legend(handles_first, labels_first, title="Input", loc=(0.15,1.2), frameon=False, alignment="left", handlelength=1.4)
+lax.add_artist(first_legend)
+# add second legend (with title for the last two)
+lax.legend(handles_last, labels_last, title="Outflow", loc=(0.15,0.1), frameon=False, alignment="left", handlelength=1.4)
+remove_axes(lax)
+
 
 for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,cols)):
     print(run_index)
@@ -159,29 +182,19 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
     print(budget_w*2/365*1e-9)
 
     if i_r == 0:
-        ax1.plot(dates_model, m_upper*1e-9/365, color="black", ls="dotted", label="Meltwater", lw=lw)
-    ax1.plot(dates_model, q_upper*1e-9/365, label=model_label, color=col, lw=lw)
-    ax1.fill_between(dates_model, q_upper*1e-9/365, qtot_out_upper*1e-9/365, alpha=0.3, facecolor=col)
-    ax1.plot(dates_model, qtot_out_upper*1e-9/365, label="", color=col, lw=lw, ls="dashdot", alpha=0.5)
-    ax1.legend()
+        ax1.plot(dates_model, m_upper*1e-9/365, color="black", ls="dotted", label="Meltwater", lw=lw, zorder=1)
+    # ax1.plot(dates_model, q_upper*1e-9/365, label=model_label, color=col, lw=lw, ls="dashdot")
+    # ax1.fill_between(dates_model, q_upper*1e-9/365, qtot_out_upper*1e-9/365, alpha=0.3, facecolor=col)
+    ax1.plot(dates_model, qtot_out_upper*1e-9/365, label="", color=col, lw=lw, ls="solid", zorder=3)
+    ax1.plot(dates_model, Q_upper*1e-9/365, label=model_label, color=col, lw=lw, ls="dashed", zorder=2)
     ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
     ax1.set_ylabel("Discharge "+ r"$(\mathrm{km^3\,d^{-1}})$")
+    y0_ax1, y1_ax1 = ax1.get_ylim()
     panel_letter_annotation(ax1, 0, annotate_fs, xyc=(0.03, 1.04))
-
-    # add separate legend between panels
-    handles, labels = ax1.get_legend_handles_labels()
-    # split into first items and last two items
-    handles_first = [handles[0]]
-    labels_first = [labels[0]]
-    handles_last = handles[1:]
-    labels_last = labels[1:]
-    # add first legend (no title)
-    first_legend = ax1.legend(handles_first, labels_first, title="Input", loc="upper center", frameon=False)
-    ax1.add_artist(first_legend)
-    # add second legend (with title for the last two)
-    ax1.legend(handles_last, labels_last, title="Outflow", loc="upper right", frameon=False)
-
+    if i_r == 1:
+        ax1.fill_betweenx([y0_ax1,y1_ax1*0.35], xstart_winter, xend_winter, facecolor="cadetblue", alpha=0.1)
+        ax1.set_ylim(y0_ax1,y1_ax1)
 
     if i_r == 1:
         model_label = "Reduced \nsheet flow"
@@ -191,10 +204,15 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
     ax2.set_xlabel("Month of 2020 / 2021")
     ax2.set_ylabel("Channel discharge "+ r"$(\mathrm{km^3\,d^{-1}})$")
+    y0_ax2, y1_ax2 = ax2.get_ylim()
     if i_r == 1:
         ax2.vlines(xend_winter, -0.2, 100, color="black", ls="-.")
-        ax2.annotate(r"$Q_\mathrm{\,end}$", xy=[datetime(2021,5,6), 0.1],ha="left") #, xycoords="axes fraction")
-    panel_letter_annotation(ax2, 3, annotate_fs, xyc=(0.03, 1.04))
+        ax2.annotate(r"$Q_\mathrm{\,end}$", xy=[datetime(2021,5,6), 0.1],ha="left")
+    if i_r == 2:
+        ax2.fill_betweenx([y0_ax2,y1_ax2], xstart_winter, xend_winter, facecolor="cadetblue", alpha=0.1)
+        ax2.annotate("Winter period", xy=[0.53, 0.85], xycoords="axes fraction", color="cadetblue", fontsize=annotate_fs*0.9, fontweight="bold")
+        ax2.set_ylim(y0_ax2,y1_ax2)
+    panel_letter_annotation(ax2, 1, annotate_fs, xyc=(0.03, 1.04))
 
 
 
@@ -304,28 +322,28 @@ for (i_r,run_index) in enumerate(run_indices_suit):
 im = ax3.scatter(np.array(Qs_channels)*1e-9/365, dUs_A, markersz, m_basal, marker="o", cmap=cmc.berlin)
 ax3.set_xlabel(r"$Q_\mathrm{\,end}$ ($\mathrm{km^3\,d^{-1}}$)")
 ax3.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
-panel_letter_annotation(ax3, 1, annotate_fs, xyc=(0.03, 1.04))
+panel_letter_annotation(ax3, 2, annotate_fs, xyc=(0.03, 1.04))
 ax3.set_xscale('log')
 ax3.set_title("Point A")
-fig.colorbar(im, ax=ax3, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+# fig.colorbar(im, ax=ax3, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
 
 # Point B, Q_end vs Delta u
 im = ax4.scatter(np.array(Qs_channels)*1e-9/365, dUs_B, markersz, m_basal, marker="o", cmap=cmc.berlin)
 ax4.set_xlabel(r"$Q_\mathrm{\,end}$ ($\mathrm{km^3\,d^{-1}}$)")
 ax4.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
-panel_letter_annotation(ax4, 4, annotate_fs, xyc=(0.03, 1.04))
+panel_letter_annotation(ax4, 3, annotate_fs, xyc=(0.03, 1.04))
 ax4.set_xscale('log')
 ax4.set_title("Point B")
-fig.colorbar(im, ax=ax4, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+# fig.colorbar(im, ax=ax4, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
 
 # Point A, budget vs Delta u
 im = ax5.scatter(np.array(qtot_out_upper)*1e-9/365, dUs_A, markersz, m_basal, marker="o", cmap=cmc.berlin)
 ax5.set_xlabel(r"Total winter discharge ($\mathrm{km^3}$)")
 ax5.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
-panel_letter_annotation(ax5, 2, annotate_fs, xyc=(0.03, 1.04))
+panel_letter_annotation(ax5, 4, annotate_fs, xyc=(0.03, 1.04))
 ax5.set_xscale('log')
 ax5.set_title("Point A")
-fig.colorbar(im, ax=ax5, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+# fig.colorbar(im, ax=ax5, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
 
 # Point A, budget vs Delta u
 im = ax6.scatter(np.array(qtot_out_upper)*1e-9/365, dUs_B, markersz, m_basal, marker="o", cmap=cmc.berlin)
@@ -334,7 +352,17 @@ ax6.set_ylabel(r"$\Delta u$ " + r"($\mathrm{m\,a^{-1}}$)")
 panel_letter_annotation(ax6, 5, annotate_fs, xyc=(0.03, 1.04))
 ax6.set_xscale('log')
 ax6.set_title("Point B")
-fig.colorbar(im, ax=ax6, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
-
+# fig.colorbar(im, ax=ax6, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+# shared colorbar
+cax = fig.add_subplot(gs[2,3])
+fig.colorbar(im, cax=cax, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+# manually define position and size of colorbar
+pos = cax.get_position()
+cax.set_position([
+    pos.x0 + 0.1 * pos.width,
+    pos.y0 - 0.8 * pos.height,
+    0.07*pos.width,
+    pos.height
+])
 
 plt.savefig(f"plotting/main_figures/f05.jpg")
