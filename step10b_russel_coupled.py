@@ -90,8 +90,10 @@ Nhat   = df.Constant(917*9.81*H_mean)
 f_melt = df.VTKFile(results_dir+"m0_per_year.pvd")
 if args.melt_input == "KAN":
     m, calc_m = hlp.melt_fct_KAN(hydro, zS, data_dir)
-elif args.melt_input == "MAR":
-    m, calc_m = hlp.melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler)
+elif args.melt_input == "MAR_monthly":
+    m, calc_m = hlp.melt_fct_MAR_monthly_files(hydro, H, meshx, meshy)
+elif args.melt_input == "MAR_daily":
+    m, calc_m = hlp.melt_fct_MAR_daily_files(hydro, H, meshx, meshy)
 elif args.melt_input == "avg":
     m, calc_m = hlp.melt_fct_avg(hydro, H)
 

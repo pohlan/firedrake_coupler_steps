@@ -17,7 +17,7 @@ cp step10b_input.sh $new_dir'input_run'$run_index'.sh'
 e_v=0.0001
 l_r=5
 h_r=1.0
-k_s=0.0004
+k_s=0.0006
 k_c=0.1
 l_c=10
 beta2=3.7e5
@@ -29,10 +29,10 @@ beta_s=1.5
 omega=0.001
 As_factor=6
 sig_topo=5
-melt_input='MAR'
+melt_input='MAR_daily'
 m_basal=0.02
 moulins=false
-t_end=12
+t_end=10
 beta2_inversion=true
 
 # record parameters in a txt file

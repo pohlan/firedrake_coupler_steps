@@ -11,6 +11,7 @@ import argparse
 import pandas as pd
 import geoutils as gu
 import rasterio.transform as rt
+from datetime import datetime, timedelta
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -127,7 +128,7 @@ def melt_fct_KAN(hydro, S, data_dir):
     df_KAN = pd.read_csv(data_dir+'KAN_melt.csv')
     def calc_melt(day, z):
         f_m = 0.01*365
-        lapse = -0.005
+        lapse = -0.0035
         # get day
         day_floor = int(np.floor(day))
         day_ceil  = day_floor+1
@@ -175,7 +176,7 @@ def melt_fct_MAR(hydro, H, meshx, meshy, coupler):
     m.dat.data[:] = melt[:,0]
     return m, calc_m
 
-def get_MAR_Raster_with_transform(file):
+def get_MAR_Raster_with_transform_monthly(file):
     ds = xr.open_dataset(
         file,
         decode_times=False
@@ -201,9 +202,9 @@ def get_MAR_Raster_with_transform(file):
     )
     return r
 
-def melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler):
+def melt_fct_MAR_monthly_files(hydro, H, meshx, meshy):
     print("Interpolating MAR melt rates, taking a while..")
-    melt_dir = "Greenland_data/forcing/MAR/"
+    melt_dir = "Greenland_data/forcing/MAR/monthly/"
     files   = os.listdir(melt_dir)
     # extract year from filename and sort in chronological order
     yr_pattern = r'\d{4}'
@@ -220,18 +221,92 @@ def melt_fct_MAR_monthly_files(hydro, H, meshx, meshy, coupler):
     n_months = len(files)*12
     melt = np.zeros((len(H.dat.data[:]), n_months))
     for (i_file,f) in enumerate(sorted_files):
-        r = get_MAR_Raster_with_transform(melt_dir+f)
+        r = get_MAR_Raster_with_transform_monthly(melt_dir+f)
         r.crop([-2.4e5, -2.62e6, 0.0, -2.46e6], inplace=True)
-        for m_of_year in range(12):
-            n = i_file*12 + m_of_year
-            melt[:,n] = r.interp_points((meshx, meshy), band=m_of_year, as_array=True) / coupler.rho_w * 12
+        for m_of_year in range(1,13):
+            n = i_file*12 + m_of_year-1
+            melt[:,n] = r.interp_points((meshx, meshy), band=m_of_year, as_array=True) / 1000 * 12
     def calc_m(t):
         month = t*12
-        month_floor = int(np.floor(month))
-        month_ceil = int(np.ceil(month))
-        floor_weight = month_ceil - month
-        ceil_weight = month - month_floor
+        month_ceil = int(np.round(month))
+        month_floor = month_ceil-1
+        floor_weight = (month_ceil+0.5) - month
+        ceil_weight = month - (month_floor+0.5)
         return melt[:,int(month_floor)]*floor_weight + melt[:,int(month_ceil)]*ceil_weight
+    # first time step
+    m = df.Function(hydro.V_phi)
+    m.dat.data[:] = melt[:,0]
+    return m, calc_m
+
+def get_MAR_Raster_with_transform_daily(file):
+    ds = xr.open_dataset(
+        file,
+        decode_times=False
+    )
+    da = ds.RU.sortby("Y21_560", ascending=False)  # ensures north-up
+    x = da.X14_311.values*1e3  # saved in km, change to m
+    y = da.Y21_560.values*1e3  # saved in km, change to m
+
+    dx = x[1] - x[0]
+    dy = abs(y[1] - y[0])   # will typically be positive after sortby
+    # transform, isn't correct when just using gu.Raster(..)
+    transform = rt.from_origin(
+        x.min() - dx / 2,
+        y.max() + dy / 2,
+        dx,
+        dy
+    )
+    arr = da.values[:,0,:,:]  # shape: (time, y, x); 0 is the sector (?)
+    r = gu.Raster.from_array(
+        arr,
+        transform=transform,
+        crs="EPSG:3413"
+    )
+    return r
+
+def melt_fct_MAR_daily_files(hydro, H, meshx, meshy):
+    print("Interpolating MAR melt rates, taking a while..")
+    melt_dir = "Greenland_data/forcing/MAR/daily/"
+    files   = os.listdir(melt_dir)
+    # extract year from filename and sort in chronological order
+    yr_pattern = r'\d{4}'
+    format_string = "%Y"
+    yrs_list = []
+    for f in files:
+        date_str = re.findall(yr_pattern, f)
+        # d = datetime.strptime(date_str[0], format_string)
+        yrs_list.append(int(date_str[0]))
+
+    pairs = zip(yrs_list, files)
+    sorted_years, sorted_files = zip(*sorted(pairs))
+    # load data
+    n_days = (datetime(sorted_years[-1]+1, 1, 1) - datetime(sorted_years[0], 1, 1)).days
+    melt = np.zeros((len(H.dat.data[:]), n_days))
+    n = 0
+    for (i_file,f) in enumerate(sorted_files):
+        r = get_MAR_Raster_with_transform_daily(melt_dir+f)
+        r.crop([-2.4e5, -2.62e6, 0.0, -2.46e6], inplace=True)
+        nd = r.count # number of days in a specific year
+        for d_of_year in range(1,nd+1):
+            melt[:,n] = r.interp_points((meshx, meshy), band=d_of_year, as_array=True) / 1000 * 365  # saved as mm w.e. / d, converting to m w.e. / yr
+            n += 1
+    # smooth
+    melt_smooth = np.zeros(melt.shape)
+    start_date = datetime(sorted_years[0],1,1)
+    time_MAR = [start_date + timedelta(days=k) for k in range(melt.shape[1])]
+    for i in range(melt_smooth.shape[0]):
+        ts = pd.Series(melt[i,:], index=time_MAR)
+        mm_smooth = ts.rolling(window='20D', center=True).mean().values
+        melt_smooth[i,:] = mm_smooth
+    def calc_m(t):
+        yr = np.floor(t)
+        n_days = np.sum([t.year == sorted_years[0]+yr for t in time_MAR])
+        day = t*n_days
+        day_ceil = int(np.round(day))
+        day_floor = day_ceil-1
+        floor_weight = (day_ceil+0.5) - day
+        ceil_weight = day - (day_floor+0.5)
+        return melt_smooth[:,int(day_floor)]*floor_weight + melt_smooth[:,int(day_ceil)]*ceil_weight
     # first time step
     m = df.Function(hydro.V_phi)
     m.dat.data[:] = melt[:,0]

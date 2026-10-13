@@ -103,19 +103,19 @@ class SpecFO(object):
         # self.tau_b_save = df.Function(self.coupler.Q_cg)
 
     def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1, N_frac=None, N=None):
-        n          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.n)
-        g          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.g)
-        rho_i      = df.Function(self.coupler.Q_cg).interpolate(self.coupler.rho_i)
+        n          = df.Constant(self.coupler.n)
+        g          = df.Constant(self.coupler.g)
+        rho_i      = df.Constant(self.coupler.rho_i)
         # scale ice flow constant to get velocities in m/a not m/s
         s_per_year = 3600*24*365
-        Be         = df.Function(self.coupler.Q_cg).interpolate((self.coupler.A*s_per_year)**(-1/n)) # Pa^(-n) a^(-1)
+        Be         = df.Constant((self.coupler.A*s_per_year)**(-1/n)) # Pa^(-n) a^(-1)
         A          = self.coupler.A*s_per_year
-        Uhat = self.Uhat = df.Function(self.coupler.Q_cg).interpolate(Uhat)
-        Nhat = self.Nhat = df.Function(self.coupler.Q_cg).interpolate(Nhat)
+        Uhat = self.Uhat = df.Constant(Uhat)
+        Nhat = self.Nhat = df.Constant(Nhat)
         # ice flow specific constants
-        eps_reg    = df.Function(self.coupler.Q_cg).interpolate(eps_reg)
-        p = self.p = df.Function(self.coupler.Q_cg).interpolate(p)
-        q = self.q = df.Function(self.coupler.Q_cg).interpolate(q)
+        eps_reg    = df.Constant(eps_reg)
+        p = self.p = df.Constant(p)
+        q = self.q = df.Constant(q)
         # beta2 = self.beta2 = df.Constant(beta2)
         beta2 = self.beta2 = df.Function(self.coupler.Q_cg).interpolate(beta2)
 
@@ -243,8 +243,8 @@ class SpecFO(object):
         # self.R_u_body_print = w_R_u * R_u_body
         # self.R_v_body_print = w_R_v * R_v_body
 
-        R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3) + vi.intz(outer_x)*df.ds(3)
-        R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3) + vi.intz(outer_y)*df.ds(3)
+        R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3) + vi.intz(outer_x)*df.ds(3, degree=3)
+        R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3) + vi.intz(outer_y)*df.ds(3, degree=3)
 
         self.coupler.R += R_u_body
         self.coupler.R += R_v_body
@@ -322,31 +322,31 @@ class GLADS(object):
     def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha_s=1.25, beta_s=1.5, As_factor=2, transition=False, omega=1/2000, u_b=30, Am=10, moulins=False):
         s_per_year = df.Constant(60**2*24*365)
         # physical constants
-        rho_i = df.Function(self.V_phi).interpolate(self.coupler.rho_i)
-        rho_w = df.Function(self.V_phi).interpolate(self.coupler.rho_w)
-        g     = df.Function(self.V_phi).interpolate(self.coupler.g)
-        n     = df.Function(self.V_phi).interpolate(self.coupler.n)
-        A_s   = df.Function(self.V_phi).interpolate(self.coupler.A*s_per_year * As_factor / n**n)
-        A_c   = df.Function(self.V_phi).interpolate(self.coupler.A*s_per_year * 2 / n**n)
-        L     = df.Function(self.V_phi).interpolate(self.coupler.L)
-        ct    = df.Function(self.V_phi).interpolate(self.coupler.ct)
-        cw    = df.Function(self.V_phi).interpolate(self.coupler.cw)
-        nu    = df.Function(self.V_phi).interpolate(self.coupler.nu)
+        rho_i = df.Constant(self.coupler.rho_i)
+        rho_w = df.Constant(self.coupler.rho_w)
+        g     = df.Constant(self.coupler.g)
+        n     = df.Constant(self.coupler.n)
+        A_s   = df.Constant(self.coupler.A*s_per_year * As_factor / n**n)
+        A_c   = df.Constant(self.coupler.A*s_per_year * 2 / n**n)
+        L     = df.Constant(self.coupler.L)
+        ct    = df.Constant(self.coupler.ct)
+        cw    = df.Constant(self.coupler.cw)
+        nu    = df.Constant(self.coupler.nu)
 
         # parameters
-        k_s     = df.Function(self.V_phi).interpolate(k_s)       # m^(7/4) kg^(-1/2) -- sheet conductivity
-        # k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s*s_per_year)
-        k_c     = df.Function(self.V_phi).interpolate(k_c)       # m^(3/2) kg^(-1/2) -- channel conductivity
-        alpha_s = df.Function(self.V_phi).interpolate(alpha_s)       # -             -- flux exponent
-        alpha_c = df.Function(self.V_phi).interpolate(1.25)
-        beta_s  = df.Function(self.V_phi).interpolate(beta_s)        # -                 -- flux exponent
-        beta_c  = df.Function(self.V_phi).interpolate(1.5)
-        h_r     = df.Function(self.V_phi).interpolate(h_r)         # m                 -- bedrock bump height
-        l_r     = df.Function(self.V_phi).interpolate(l_r)         # m                 -- bedrock bump length
-        l_c     = df.Function(self.V_phi).interpolate(l_c)         # m
-        e_v     = df.Function(self.V_phi).interpolate(e_v)         # -                 -- englacial storage ratio
-        Am      = df.Function(self.V_phi).interpolate(Am)          # m^2               -- moulin cross-sectional area
-        omega   = df.Function(self.V_phi).interpolate(omega)
+        k_s     = df.Constant(k_s)       # m^(7/4) kg^(-1/2) -- sheet conductivity
+        # k_s = self.k_s = df.Function(self.V_phi).interpolate(k_s)
+        k_c     = df.Constant(k_c)       # m^(3/2) kg^(-1/2) -- channel conductivity
+        alpha_s = df.Constant(alpha_s)       # -             -- flux exponent
+        alpha_c = df.Constant(1.25)
+        beta_s  = df.Constant(beta_s)        # -                 -- flux exponent
+        beta_c  = df.Constant(1.5)
+        h_r     = df.Constant(h_r)         # m                 -- bedrock bump height
+        l_r     = df.Constant(l_r)         # m                 -- bedrock bump length
+        l_c     = df.Constant(l_c)         # m
+        e_v     = df.Constant(e_v)         # -                 -- englacial storage ratio
+        Am      = df.Constant(Am)          # m^2               -- moulin cross-sectional area
+        omega   = df.Constant(omega)
 
         # source term
         m = self.m = df.Function(self.V_phi).interpolate(m)
