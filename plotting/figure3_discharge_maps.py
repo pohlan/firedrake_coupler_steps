@@ -14,7 +14,7 @@ import cmcrameri.cm as cmc
 import matplotlib.colors as colors
 import fiona
 
-run_indices = [314,706]
+run_indices = [312,706]
 model_labels  = ["Baseline", "Reduced sheet flow"]
 # run_indices = [479,478]
 # model_labels  = ["Smaller catchment", "Reduced \nsheet flow"]

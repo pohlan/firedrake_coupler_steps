@@ -22,7 +22,6 @@ wspace_size = 0.05
 if fig_mode == "main":
     ds_upglacier = [10e3,35e3,10e3,16e3]
     glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Isorlersuup"]
-    width_ratios = [6, 6, wspace_size, 6, wspace_size, 6]
     title_bar_lengths = [2,1,1]
     pw_lims = (-0.3,0.98)
     y_Jan_annot = -0.25
@@ -31,15 +30,14 @@ if fig_mode == "main":
 else:
     ds_upglacier = [10e3,30e3,10e3,30e3]
     glacier_names = ["Ørkendalen", "Ørkendalen", "Glacier 5", "Glacier 5"]
-    width_ratios = [6, 6, wspace_size, 6, 0.0, 6, 1]
-    title_bar_lengths = [2,3]
-    pw_lims = (-1.2,0.98)
-    y_Jan_annot = 0.4
-    speed_lims = (-120,140)
+    title_bar_lengths = [2,2]
+    pw_lims = (-0.3,0.98)
+    y_Jan_annot = -0.25
+    speed_lims = (-60,130)
     figname = "fS02"
 
 n_glaciers = len(glacier_names)
-run_indices = [314,706]
+run_indices = [312,706]
 model_labels = ["Baseline", "Reduced \nsheet flow"]
 model_start_years = [2014,2014]
 # model_labels = ["Larger domain", "Reduced \nsheet flow"]

@@ -11,14 +11,11 @@ from firedrake.pyplot import tripcolor
 import pandas as pd
 import cmcrameri.cm as cmc
 
-# run_indices_maps = [542,536]
-run_indices_maps = [314,706]
-# hr = hlp.get_params_from_input_file(run_indices_maps[2])["h_r"]
-model_labels = ["Baseline", "Red. sheet flow", "Turbulent"]
+run_indices_maps = [312,706]
+model_labels = ["Baseline", "Red. sheet flow"]
 year0 = 2020
 xstart_winter, xend_winter = datetime(year0,10,1), datetime(year0+1,4,30)
 xstart_summer, xend_summer = datetime(year0,5,1), datetime(year0,9,30)
-xstart_plot, xend_plot = datetime(year0, 4, 15), datetime(year0+1, 6, 20)
 
 xcoords = [-205482.0,-144630.0]
 ycoords = [-2527653.0,-2.52e6]
@@ -31,7 +28,6 @@ vmin_s, vmax_s = 0, 110
 plt.rcParams['font.size'] = 35
 annotate_fs = 35
 marker_size = 115
-colors = plt.cm.berlin(np.linspace(0.1, 0.9, 5))
 cmap_summer = cmc.nuuk # cmc.davos
 cmap_winter = "BrBG"
 
@@ -95,10 +91,6 @@ def plot_model_panel(ax, fig, gsc, ii, mesh_, run_index, model_label, B, gdf, vm
     gdf.plot(ax=ax, facecolor="none", edgecolor="black", linewidth=1, label="Domain")
     ax.vlines(x0, ax.get_ylim()[0]+2.4e4, ax.get_ylim()[1]+1e4, color="grey", lw=6, ls="dotted")
     ax.annotate("Fig. 6 \nflux gate", xy=(x0+0.5e4, ax.get_ylim()[0]-6e3), fontsize=annotate_fs, ha="center", annotation_clip=False)
-
-
-param_labels = {"k_s": r"$k_s$", "h_r": r"$h_r$", "m_basal": r"$m_\mathrm{basal}$"}
-param_units  = {"k_s": r"$\mathrm{m^{\frac{7}{4}}\,kg^{-\frac{1}{2}}}$", "h_r": r"$\mathrm{m}$", "m_basal": r"$\mathrm{m\,a^{-1}}$"}
 
 
 fig = plt.figure(figsize=(17, 18))
@@ -189,9 +181,9 @@ make_custom_cax(fig, gs[0,1], im, lab_s)
 
 
 
-# #################
-# # MODEL         #
-# #################
+#################
+# MODEL         #
+#################
 
 B, H, S = load_topography(mesh_)
 
@@ -207,86 +199,3 @@ for ii, (run_index, gi, model_label) in enumerate(zip(run_indices_maps, [2,4], m
 
 
 plt.savefig(f"plotting/main_figures/f04.jpg")
-
-
-# #####################################
-# # Separate figure for sensitivities #
-# #####################################
-
-# fig = plt.figure(figsize=(22, 18))
-# gs = fig.add_gridspec(6, 2, top=0.99, bottom=0.06, left=0.16, right=0.97, hspace=0.4, wspace=0.4, width_ratios=[1,1], height_ratios=[0.18,1,0.2,1,0.2,1])
-
-
-# topax = fig.add_subplot(gs[0, 0])
-# topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
-# topax.set_xlim(0,1)
-# topax.axis("off")
-# topax.annotate("A", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
-
-
-# topax = fig.add_subplot(gs[0, 1])
-# topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
-# topax.set_xlim(0,1)
-# topax.axis("off")
-# topax.annotate("B", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
-
-
-# #####################
-# # Sensitivity plots #
-# #####################
-
-# # run_indices_suit = range(601,641)
-# # run_indices_suit = range(811,851)
-# run_indices_suit = range(811,851)
-# # run_indices_timeseries = [478, 531]
-# run_indices_timeseries = [812,848,706] #,836]
-
-# # point A
-# ax_w = fig.add_subplot(gs[1, 0])
-# ax_s = fig.add_subplot(gs[3, 0])
-# plot_sensitivity_panel(ax_w, ax_s, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, xstart_summer, xend_summer, [[xcoords[0]]], [[ycoords[0]]], colors, 0,
-#                        run_indices_timeseries, param_units, param_labels, legend=False, annotate_fs=annotate_fs, ylims_w=(-5,5.4), ylims_s=(15,68))
-# ylims_w_A = ax_w.get_ylim()
-# ylims_s_A = ax_s.get_ylim()
-
-# ax_w.annotate("Winter\nspeedup rate", xy=[-0.35, 0.5], xycoords="axes fraction", rotation=90, annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
-# ax_s.annotate("Max. summer\nspeed anomaly", xy=[-0.35, 0.5], xycoords="axes fraction", rotation=90, annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
-
-# # point B
-# ax_w = fig.add_subplot(gs[1, 1])
-# ax_s = fig.add_subplot(gs[3, 1])
-# plot_sensitivity_panel(ax_w, ax_s, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, xstart_summer, xend_summer, [[xcoords[1]]], [[ycoords[1]]], colors, 1,
-#                        run_indices_timeseries, param_units, param_labels, labelloc=(0.2,0.6), legend=True, annotate_fs=annotate_fs, ylims_w=ylims_w_A, ylims_s=ylims_s_A, scatter_annotate=True)
-
-
-# # ax = fig.add_subplot(gs[8, 1])
-# # plot_sensitivity_panel_summer(ax, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_summer, xend_summer, [[xcoords[0]]], [[ycoords[0]]], colors, 4,
-# #                        param_units, param_labels, annotate_fs=annotate_fs)
-# # ylims_A = ax.get_ylim()
-
-# # ax = fig.add_subplot(gs[10, 1])
-# # plot_sensitivity_panel_summer(ax, mesh_, vel_dir, run_indices_suit, "k_s", "m_basal", xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]], colors, 8,
-# #                        param_units, param_labels, annotate_fs=annotate_fs, legend=False) #, obs_note="left")
-# # ylims_B = ax.get_ylim()
-
-
-
-# ####################
-# # Timeseries plots #
-# ####################
-
-# # A
-# labels = ["Lowest " + r"$k_s$","Highest " + r"$k_s$","Red. sheet flow"]
-# ax = fig.add_subplot(gs[5, 0])
-# plot_timeseries_panel(ax, mesh_, vel_dir, run_indices_timeseries, labels, xstart_winter, xend_winter, xstart_plot, xend_winter, [[xcoords[0]]], [[ycoords[0]]], cols, 4,
-#                       param_units, param_labels, annotate_fs=annotate_fs, legend=False)
-# ylims_speed = ax.get_ylim()
-
-# # B
-# ax = fig.add_subplot(gs[5, 1])
-# plot_timeseries_panel(ax, mesh_, vel_dir, run_indices_timeseries, labels, xstart_winter, xend_winter, xstart_plot, xend_winter, [[xcoords[1]]], [[ycoords[1]]], cols, 5,
-#                       param_units, param_labels, ylims=ylims_speed, annotate_fs=annotate_fs)
-
-
-# # save
-# plt.savefig(f"plotting/main_figures/f05.jpg")

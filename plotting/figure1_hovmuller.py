@@ -14,7 +14,7 @@ from firedrake.pyplot import tripcolor
 from matplotlib.colors import LogNorm
 
 # which glaciers and runs to plot
-run_index1, run_index2 = 314, 706
+run_index1, run_index2 = 312, 706
 model_start_yrs        = [2014, 2014]
 model_labels  = ["Baseline", "Reduced \nsheet flow"]
 glacier_ids = [1,2,3,4,5]

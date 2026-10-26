@@ -27,7 +27,7 @@ run_indices_transition = list(range(811,851))
 # run_indices_turbulent = list(range(601,611))
 # run_indices_transition = list(range(811,822))
 m_b_0 = 0.02
-run_indices = [314,706]
+run_indices = [312,706]
 model_labels  = ["Baseline", "Reduced sheet\nflow"] #, "Reduced sheet\nflow\nturbulent", "any", "any"]
 cols = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 
@@ -245,29 +245,11 @@ def inputs_outputs_timeseries(run_index, xstart, xend):
 for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,cols)):
     print(run_index)
 
-
-    xstart, xend = datetime(year0,4,1),datetime(year0+1,6,1)
-    # xstart,xend = datetime(2018,5,1),datetime(2022,6,1)
-    xstart_winter, xend_winter = datetime(year0,10,1), datetime(year0+1,4,30)
-    xstart_summer, xend_summer = datetime(year0,5,1), datetime(year0,9,30)
-
-
-    if (run_index==314) | (run_index==478):
-        xstart_summer +=  timedelta(days=15)
-        xend_summer += timedelta(days=15)
-        xstart_winter +=  timedelta(days=15)
-        xend_winter += timedelta(days=15)
-        xstart += timedelta(days=15)
-        xend += timedelta(days=15)
-        # dates_model = np.array([date - timedelta(days=15) for date in dates_model])
-
-
     # load timeseries of fluxes total and through fluxgate (upper)
     m_upper, q_upper, Q_upper, ms, q_out, Q_termini, ms_IG, dates_model, n_idx = inputs_outputs_timeseries(run_index, xstart, xend)
     qtot_out = np.sum(Q_termini,axis=1)+q_out
     Qout_IG = Q_termini[:,0]
     qtot_out_upper = Q_upper+q_upper
-
 
     # calculate total winter discharge to compare to basal melt input
     # if run_index == 314:
@@ -289,9 +271,6 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
     # print(f"Total basal melt winter: {basal_winter*1e-12} x 1e-12")
     # print(f"ratio retained vs winter basal melt: {budget_s/basal_winter}")
     # print(f"retained as a percentage of retained + winter basal melt: {budget_s/(budget_s+basal_winter)}")
-
-    if (run_index==314) | (run_index==478):
-        dates_model = np.array([date - timedelta(days=15) for date in dates_model])
 
     # plot
     if i_r == 1:
