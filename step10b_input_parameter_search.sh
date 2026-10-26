@@ -3,9 +3,8 @@
 
 target_directory='parameter_runs/'
 
-run_index=601
-
-for k_s_i in {0.00005,0.0001}  #{0.00005,0.0001,0.0002,0.0005,0.001,0.002,0.005,0.01}
+run_index=811
+for k_s_i in {0.05,} # {0.00005,0.0001,0.0002,0.0005,0.001, 0.002, 0.005, 0.01, 0.02, 0.05}
 do
   for m_basal_i in {0.001,0.02,0.05,0.1}
   do
@@ -24,13 +23,13 @@ do
     beta2=3.7e5
     p=1.2
     q=1.0
-    transition=false
-    alpha_s=1.25
+    transition=true
+    alpha_s=1.5
     beta_s=1.5
-    omega=0.001
+    omega=0.0005
     As_factor=6
     sig_topo=5
-    melt_input='MAR'
+    melt_input='MAR_monthly'
     m_basal=$m_basal_i
     moulins=false
     t_end=10

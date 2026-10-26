@@ -57,14 +57,14 @@ def remove_axes(ax, xlims=(-2.4e5,-0.2e5), ylims=(-2.585e6,-2.47e6)):
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_legend=False, fontsize=18, y_panellabel=0.9):
+def format_ax(ax, xstart, xend, colmn, panel_idx=0, ylims=None, ylabel="", draw_legend=False, fontsize=18, y_panellabel=0.9):
     if not (ylims is None):
         ymin, ymax = ylims
     else:
         ymin, ymax = ax.get_ylim()
     ax.set_xticklabels([])
     jan_lines = [datetime(yr,1,1) for yr in range(xstart.year+1,xend.year+1)]
-    ax.vlines(jan_lines, ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5)
+    ax.vlines(jan_lines, ymin-0.2*(ymax-ymin), ymax+0.2*(ymax-ymin), color="black", ls="dotted", alpha=0.5, lw=2)
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=[1]))
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=7))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
@@ -76,7 +76,7 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
     ax.set_ylabel(ylabel)
     if draw_legend:
         ax.legend()
-    if ig > 0:
+    if colmn != 0:
         ax.tick_params(axis='y', labelleft=False, length=7, width=2)
     else:
         ax.tick_params(axis='y', length=7, width=2)
@@ -84,7 +84,7 @@ def format_ax(ax, xstart, xend, ig, panel_idx=0, ylims=None, ylabel="", draw_leg
     panel_label = idx_to_letter(panel_idx)
     ax.annotate(panel_label, xy=(0.03,y_panellabel), xycoords="axes fraction", fontsize=fontsize, fontweight="bold")
 
-def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, ig, n_glaciers, model_label, ax1, ylims, fs):
+def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xend, color, lw, row, colmn, model_label, ax1, ylims, fs):
     # observations, plot only if the ax is empty still to avoid re-doing it several times
     if len(ax1.lines) == 0:
         obs_mean = np.mean(np.array(Uobs)[np.where(np.isfinite(Uobs))])
@@ -106,7 +106,7 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
 
     # ymin = min(np.array(Umod_time)[i_model].min()-model_mean, np.min(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
     # ymax = max(np.array(Umod_time)[i_model].max()-model_mean, np.max(np.array(Uobs_time)[i_obs[np.where(np.isfinite(np.array(Uobs_time)[i_obs]))[0]]])-obs_mean)
-    format_ax(ax1, xstart, xend, ig, panel_idx=ig, ylims=ylims, ylabel=r"Speed rel. to mean ($\mathrm{m\,a^{-1}}$)", fontsize=fs)
+    format_ax(ax1, xstart, xend, colmn, panel_idx=row*2+colmn, ylims=ylims, ylabel=r"Speed anomaly ($\mathrm{m\,a^{-1}}$)", fontsize=fs)
     # format_ax(ax1, xstart, xend, ig, ylims=(50,250), panel_idx=ig, ylabel=r"Speed ($\mathrm{m^3\,a^{-1}}$)")
 
     # melt input, also only plot once the first time
@@ -124,7 +124,7 @@ def plot_vel_timeseries(dates_model, Umodel, m_time, obs_dates, Uobs, xstart, xe
         ax2.fill_between(dates_model, m_time, color="grey", alpha=0.3)
         ax2.set_ylim(0, 19)
         ax2.tick_params(axis='y', labelright=False, colors="grey", length=7, width=2)
-        if (ig==n_glaciers-1):
+        if (colmn==1):
             ax2.set_ylabel(r"Runoff ($\mathrm{m^3\,a^{-1}}$)")
             ax2.yaxis.label.set_color("grey")
             ax2.tick_params(axis='y', labelright=True, colors="grey", length=7, width=2)
@@ -157,90 +157,124 @@ def panel_letter_annotation(ax, ii, annotate_fs, xyc=(0.03, 1.0)):
 
 # Fig. 4 and Fig. SXX
 
-def plot_sensitivity_panel(ax, mesh_, vel_dir, run_indices, var1, var2, xstart, xend, xc, yc, colors, ii, param_units, param_labels,
-                           xscale="log", labelloc="best", legend=True, lw_times=2, marker_size_times=8, annotate_fs=23, ylims=None):
-    dUs = []
+def plot_sensitivity_panel(ax_w, ax_s, mesh_, vel_dir, run_indices, var1, var2, xstart_winter, xend_winter, xstart_summer, xend_summer, xc, yc, colors, ii, run_indices_timeseries, param_units, param_labels,
+                           xscale="log", labelloc="best", legend=True, lw=3.5, marker_size_times=10, annotate_fs=23, ylims_s=None, ylims_w=None, scatter_annotate=False):
+    dUs_winter = []
+    dUs_summer = []
     param1 = []
     param2 = []
-
+    i_low  = np.nan
+    i_high = np.nan
+    i_r = 0
     for run_idx in run_indices:
         try:
-            U_monthly = get_monthly_means_model(mesh_, run_idx, xstart, xend, xc, yc, start_year=2014)
-            if len(U_monthly) == 0:
+            U_monthly_winter = get_monthly_means_model(mesh_, run_idx, xstart_winter, xend_winter, xc, yc, start_year=2014)
+            U_monthly_summer = get_monthly_means_model(mesh_, run_idx, xstart_summer, xend_summer, xc, yc, start_year=2014)
+            if len(U_monthly_winter) == 0:
                 continue
-            dU = fit_linear_slope(U_monthly)
-            dUs.append(dU)
+            dU_winter = fit_linear_slope(U_monthly_winter)
+            dU_summer = (np.max(U_monthly_summer) - np.mean(np.concatenate([U_monthly_summer,U_monthly_winter])))
+            dUs_winter.append(dU_winter)
+            dUs_summer.append(dU_summer)
             float_params = hlp.get_params_from_input_file(run_idx)
             param1.append(float_params[var1])
             param2.append(float_params[var2])
             print(f"run {run_idx}, {var1} = {float_params[var1]}")
+
+            if run_idx == run_indices_timeseries[0]:
+                i_low = i_r
+            elif run_idx == run_indices_timeseries[1]:
+                i_high = i_r
+            i_r += 1
         except:
             continue
 
     param1 = np.array(param1)
-    dUs = np.array(dUs)
 
     obs_files = glob.glob(vel_dir+"*vv*.tif")
-    obs_dates, obs_files = get_obs_files(obs_files, xrange=(xstart,xend))
+    obs_dates, obs_files = get_obs_files(obs_files, xrange=(xstart_winter,xend_winter))
     Uobs_glaciers = load_obs_timeseries(obs_files, xc, yc)[:, 0]
     # obs_m = np.mean(np.diff(Uobs_glaciers))
-    sig = get_obs_errors(xstart, xend, xc, yc, vel_dir)
+    sig = get_obs_errors(xstart_winter, xend_winter, xc, yc, vel_dir)
     slope, slope_err = fit_linear_slope(Uobs_glaciers, sig)
 
-    ax.set_prop_cycle(cycler(color=colors))
-    for m in np.unique(param2):
-        i_m = np.where(param2 == m)
-        idx = np.argsort(param1[i_m])
-        ax.plot(param1[i_m][idx], dUs[i_m][idx], label=f"{m}", marker="o", lw=lw_times, markersize=marker_size_times)
+    ylabels = [r"$\dot{u}_\mathrm{winter}$ ($\mathrm{m\,a^{-1}}$/month)", r"$\Delta u_\mathrm{max}$ ($\mathrm{m\,a^{-1}}$)"]
 
-    xmin, xmax = ax.get_xlim()
-    ax.fill_between([xmin,xmax], slope-2*slope_err, slope+2*slope_err, alpha=0.1, color="black")
-    ax.hlines(slope, xmin, xmax, color="black", ls="dashed", lw=lw_times)
-    # ax.legend(title=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
-    if param_units[var1] == "":
-        l1 = param_labels[var1]
-    else:
-        l1 = param_labels[var1]+" ("+ param_units[var1] +")"
-    if param_units[var2] == "":
-        l2 = param_labels[var2]
-    else:
-        l2 = param_labels[var2]+" ("+ param_units[var2] +")"
-    if legend:
-        ax.legend(title=l2, loc=labelloc, handlelength=1.2, fontsize=annotate_fs*0.9, title_fontsize=annotate_fs*0.9)
-    ax.set_xlabel(l1)
-    ax.set_ylabel(r"$\Delta u$ ($\mathrm{m\,a^{-1}}$)")
-    ax.set_xscale(xscale)
-    panel_letter_annotation(ax, ii, annotate_fs)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    if ylims is not None:
-        ax.set_ylim(ylims)
-    y0, y1 = ax.get_ylim()
-    x0, x1 = ax.get_xlim()
-    if y1 > 4:
-        x_shift = 0.56
-    else:
-        x_shift = 0.16
-    if xscale == "log":
-        xannotate = np.exp(np.log(x0) + x_shift*(np.log(x1)-np.log(x0)))
-    else:
-        xannotate = x0+x_shift*(x1-x0)
-    ax.annotate("Observed", xy=(xannotate, slope-2*slope_err-0.02*(y1-y0)), fontsize=annotate_fs, annotation_clip=False, va="top")
+    for (i,(ax,dUs,ylab)) in enumerate(zip([ax_w,ax_s],[dUs_winter,dUs_summer],ylabels)):
+        # plot dUS
+        dUs = np.array(dUs)
+        ax.set_prop_cycle(cycler(color=colors))
+        for m in np.unique(param2):
+            i_m = np.where(param2 == m)
+            idx = np.argsort(param1[i_m])
+            ax.plot(param1[i_m][idx], dUs[i_m][idx], label=f"{m}", marker="o", lw=lw, markersize=marker_size_times)
+
+        ax.scatter([param1[i_low]], [dUs[i_low]],   facecolors='none', edgecolors='lightsteelblue', label="", linewidths=4, s=marker_size_times*55)
+        ax.scatter([param1[i_high]], [dUs[i_high]], facecolors='none', edgecolors='darkblue',       label="", linewidths=4, s=marker_size_times*55)
+        if (i == 1) & (scatter_annotate):
+            ax.annotate("Lowest " + r"$k_s$", xy=(param1[i_low]+5e-5, dUs[i_low]), fontsize=annotate_fs, annotation_clip=False, va="center")
+            ax.annotate("Highest\n"+ r"$k_s$", xy=(param1[i_high]-2e-5, dUs[i_high]+6), fontsize=annotate_fs, annotation_clip=False, ha="center")
 
 
-def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, var, xstart, xend, xstart_plot, xend_plot, xc, yc, cols, ii, param_units, param_labels,
-                          lw_times=2, marker_size_times=8, annotate_fs=23, ylims=None):
+        # set x and y limits
+        if (i==0) & (ylims_w is not None):
+            ax.set_ylim(ylims_w)
+        elif (i==1) & (ylims_s is not None):
+            ax.set_ylim(ylims_s)
+        ax.set_xscale(xscale)
+        x0, x1 = ax.get_xlim()
+        y0, y1 = ax.get_ylim()
+        # for winter speedup, also plot observed rates
+        if i == 0:
+            ax.fill_between([x0,x1], slope-2*slope_err, slope+2*slope_err, alpha=0.1, color="black")
+            ax.hlines(slope, x0, x1, color="black", ls="dashed", lw=lw)
+            if legend==False:
+                x_shift = 0.65
+                xannotate = np.exp(np.log(x0) + x_shift*(np.log(x1)-np.log(x0)))
+                ax.annotate("Observed", xy=(xannotate, slope-2*slope_err-0.02*(y1-y0)), fontsize=annotate_fs, annotation_clip=False, va="top")
+            # else:
+                # x_shift = 0.16
+            # if xscale == "log":
+            # else:
+                # xannotate = x0+x_shift*(x1-x0)
+        # legend
+        if param_units[var1] == "":
+            l1 = param_labels[var1]
+        else:
+            l1 = param_labels[var1]+" ("+ param_units[var1] +")"
+        if param_units[var2] == "":
+            l2 = param_labels[var2]
+        else:
+            l2 = param_labels[var2]+" ("+ param_units[var2] +")"
+        if (legend) & (i==0):
+            ax.legend(title=l2, loc=labelloc, handlelength=1.2, fontsize=annotate_fs*0.9, title_fontsize=annotate_fs*0.9, ncols=2, frameon=False)
+        # labels
+        ax.set_xlabel(l1)
+        ax.set_ylabel(ylab)
+        panel_letter_annotation(ax, ii+i*2, annotate_fs, xyc=(0.03, 1.05))
+        # remove lines around panel on top and right
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, labels, xstart, xend, xstart_plot, xend_plot, xc, yc, cols, ii, param_units, param_labels,
+                          lw_times=3.5, marker_size_times=8, annotate_fs=23, ylims=None, legend=True):
     files = glob.glob(vel_dir+"*vv*.tif")
     obs_dates, obs_files = get_obs_files(files, xrange=(xstart_plot, xend_plot))
-    for (run_idx,c) in zip(run_indices,cols):
+    cols = ["lightsteelblue", "darkblue", "cornflowerblue"]
+    lws    = [lw_times,lw_times, lw_times*1.4]
+    for (run_idx,c,lab,lw) in zip(run_indices,cols,labels,lws):
         float_params = hlp.get_params_from_input_file(run_idx)
-        param = float_params[var]
-        # m  = float_params["m_basal"]
+        ks = float_params["k_s"]
+        m  = float_params["m_basal"]
         dates_model, U_model = get_model_timeseries_for_locations(
             mesh_, run_idx, xstart_plot, xend_plot, xc, yc, start_year=2014
         )
-        lab = param_labels[var] + f" = {param} " + param_units[var]
-        ax.plot(dates_model, U_model - np.mean(U_model), color=c, label=lab, lw=lw_times) #+"\n"+rf"$m_\mathrm{{basal}}= {m}$")
+        i_hydro_year = np.where(dates_model < xend)
+        # if lab == "":
+        #     ks_unit = r"$\mathrm{m^{\frac{7}{4}}\,kg^{-\frac{1}{2}}}$"
+        #     m_unit  = r"$\mathrm{m\,a^{-1}}$"
+        #     lab = r"$k_s = $" + f"{ks} "+ks_unit + "\n" + r"$m_\mathrm{basal} = $" + f"{m} " + m_unit
+        ax.plot(dates_model, U_model - np.mean(U_model[i_hydro_year]), color=c, label=lab, lw=lw)
 
     Uobs_glaciers = load_obs_timeseries(obs_files, xc, yc)[:, 0]
     ax.plot(obs_dates, Uobs_glaciers - np.nanmean(Uobs_glaciers), color="black", ls="dashed", marker="o", label="Observed", lw=lw_times, markersize=marker_size_times)
@@ -248,15 +282,20 @@ def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, var, xstart, xend, xs
         y0, y1 = ylims
     else:
         y0, y1 = ax.get_ylim()
-    ax.fill_betweenx([y0, y1], xstart, xend, alpha=0.1, facecolor="cadetblue")
+    ax.fill_betweenx([y0, y1], xstart, xend, alpha=0.15, facecolor="grey")
+    if legend==False:
+        ax.annotate("Winter period", xy=[0.7, 0.7], xycoords="axes fraction", color="black", fontsize=annotate_fs*0.85, fontweight="bold", ha="center")
+
+
     ax.set_xlabel("Month of 2020/2021")
-    ax.set_ylabel(r"Speed rel. to mean ($\mathrm{m\,a^{-1}}$)")
-    ax.legend(handlelength=1.2, fontsize=annotate_fs*0.9)
+    ax.set_ylabel(r"$\Delta u$ ($\mathrm{m\,a^{-1}}$)")
+    if legend:
+        ax.legend(handlelength=1.2, fontsize=annotate_fs*0.9, loc=(0.4,0.42), frameon=False)
     if ylims is not None:
         ax.set_ylim(ylims)
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m"))
-    panel_letter_annotation(ax, ii, annotate_fs)
+    panel_letter_annotation(ax, ii, annotate_fs, xyc=(0.03, 1.05))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -294,3 +333,15 @@ def get_Q_lines(Q_vals, smesh_):
                         #    norm=plt.Normalize(vmin=np.nanmin(Q_vals)*(1), vmax=Q_min*1000))
 
     return lines, colors
+
+def make_custom_cax(fig, gs_cax, cl, lab, rx0=0.3, ry0=0.8, w=0.5, h=0.1, orient="horizontal"):
+    cax = fig.add_subplot(gs_cax)
+    fig.colorbar(cl, cax=cax, label=lab, orientation=orient)
+    # manually define position and size of colorbar
+    pos = cax.get_position()
+    cax.set_position([
+        pos.x0 + rx0 * pos.width,
+        pos.y0 + ry0 * pos.height,
+        w*pos.width,
+        h*pos.height
+    ])

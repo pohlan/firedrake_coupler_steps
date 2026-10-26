@@ -131,8 +131,8 @@ dt0= 2*hour
 
 if args.beta2_inversion:
     # get beta2 from inversion
-    chk_file = f"test_inversion/beta2_opt_1e-2.0_run477.h5"
-    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run304.h5"
+    chk_file = f"test_inversion/beta2_opt_1e-2.0_run543.h5"
+    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run313.h5"
     # chk_file = f"test_inversion/beta2_opt_1e-2.0_run{args.run_index}.h5"
     with CheckpointFile(chk_file, 'r') as afile:
             mesh_ = afile.load_mesh()
@@ -156,9 +156,19 @@ else:
 # meshx, meshy = zip(*hlp.get_coordinates(mesh_, "CG", 1))
 # dU = df.Function(V)
 # dU.dat.data[:] = r.interp_points((meshx, meshy), as_array=True)
-# k_s = df.Function(V).interpolate(10**(-2-dU/2))
-# k_s.interpolate(df.max_value(df.min_value(k_s, 1e-2), 1e-4))
+# # k_s = df.Function(V).interpolate(10**(-2.5-dU/2))
+# # k_s.interpolate(df.max_value(df.min_value(k_s, 1e-2), 1e-5))
+# k_s = df.Function(V).interpolate(10**(-2.8-dU/(1)))
+# k_s.interpolate(df.max_value(df.min_value(k_s, 0.1), 1e-5))
 # df.VTKFile(results_dir+"k_s.pvd").write(k_s)
+
+# chk_file = "ks_russel.h5"
+# with CheckpointFile(chk_file, 'r') as afile:
+#     mesh_ = afile.load_mesh()
+#     k_s = afile.load_function(mesh_, "k_s")
+# k_s.dat.data[:] = k_s.dat.data[:]*2
+# df.VTKFile(results_dir+"k_s.pvd").write(k_s)
+
 
 # locally reduced k_s for Isunnguata Sermia
 # from plotting.loading_functions import get_profile

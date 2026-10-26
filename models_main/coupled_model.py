@@ -103,19 +103,19 @@ class SpecFO(object):
         # self.tau_b_save = df.Function(self.coupler.Q_cg)
 
     def build_forms(self, p=0.5, q=0.5, eps_reg=1e-5, beta2=140, Uhat=1, Nhat=1, N_frac=None, N=None):
-        n          = df.Constant(self.coupler.n)
-        g          = df.Constant(self.coupler.g)
-        rho_i      = df.Constant(self.coupler.rho_i)
+        n          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.n)
+        g          = df.Function(self.coupler.Q_cg).interpolate(self.coupler.g)
+        rho_i      = df.Function(self.coupler.Q_cg).interpolate(self.coupler.rho_i)
         # scale ice flow constant to get velocities in m/a not m/s
         s_per_year = 3600*24*365
-        Be         = df.Constant((self.coupler.A*s_per_year)**(-1/n)) # Pa^(-n) a^(-1)
+        Be         = df.Function(self.coupler.Q_cg).interpolate((self.coupler.A*s_per_year)**(-1/n)) # Pa^(-n) a^(-1)
         A          = self.coupler.A*s_per_year
-        Uhat = self.Uhat = df.Constant(Uhat)
-        Nhat = self.Nhat = df.Constant(Nhat)
+        Uhat = self.Uhat = df.Function(self.coupler.Q_cg).interpolate(Uhat)
+        Nhat = self.Nhat = df.Function(self.coupler.Q_cg).interpolate(Nhat)
         # ice flow specific constants
-        eps_reg    = df.Constant(eps_reg)
-        p = self.p = df.Constant(p)
-        q = self.q = df.Constant(q)
+        eps_reg    = df.Function(self.coupler.Q_cg).interpolate(eps_reg)
+        p = self.p = df.Function(self.coupler.Q_cg).interpolate(p)
+        q = self.q = df.Function(self.coupler.Q_cg).interpolate(q)
         # beta2 = self.beta2 = df.Constant(beta2)
         beta2 = self.beta2 = df.Function(self.coupler.Q_cg).interpolate(beta2)
 
@@ -243,8 +243,8 @@ class SpecFO(object):
         # self.R_u_body_print = w_R_u * R_u_body
         # self.R_v_body_print = w_R_v * R_v_body
 
-        R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3) + vi.intz(outer_x)*df.ds(3, degree=3)
-        R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3) + vi.intz(outer_y)*df.ds(3, degree=3)
+        R_u_body = (- vi.intz(membrane_xx) - vi.intz(membrane_xy) - vi.intz(shear_xz) + tau_bx*lamda_x(1) - vi.intz(tau_dx))*df.dx(degree=3) # + vi.intz(outer_x)*df.ds(3, degree=3)
+        R_v_body = (- vi.intz(membrane_yx) - vi.intz(membrane_yy) - vi.intz(shear_yz) + tau_by*lamda_y(1) - vi.intz(tau_dy))*df.dx(degree=3) # + vi.intz(outer_y)*df.ds(3, degree=3)
 
         self.coupler.R += R_u_body
         self.coupler.R += R_v_body
@@ -419,6 +419,8 @@ class GLADS(object):
             self.q_s = q_s   = s_per_year*(-k_s*Max(h,1e-15)**alpha_s*Max(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(beta_s/2.-1)*df.grad(phi))
             # sheet flux along edges
             q_c = s_per_year*(-k_s*Max(h,1e-15)**alpha_s*Max(dphids**2, 1e-15)**(beta_s/2.-1)*dphids)
+            # q_c = s_per_year*(-k_s*Max((h-0.08)/abs(h-0.08),0)*Max(h,1e-15)**alpha_s*Max(dphids**2, 1e-15)**(beta_s/2.-1)*dphids)
+
         # save Reynolds number for visualization
         self.Re = Max(df.dot(q_s,q_s),1e-15)**(1/2)/(nu*s_per_year)
 
@@ -822,10 +824,10 @@ class Coupler_Flow(object):  # hydro only
         self.mesh = mesh
 
         # physical constants used in both models
-        self.n     = df.Constant(3)           # -              -- flow exponent
-        self.A     = df.Constant(3.375e-24)   # Pa^(-n) s^(-1) -- flow constant
-        self.g     = df.Constant(9.81)        # m / s^2        -- gravitational acceleration
-        self.rho_i = df.Constant(910)         # kg / m^3       -- density of ice
+        self.n     = 3           # -              -- flow exponent
+        self.A     = 3.375e-24   # Pa^(-n) s^(-1) -- flow constant
+        self.g     = 9.81        # m / s^2        -- gravitational acceleration
+        self.rho_i = 910         # kg / m^3       -- density of ice
 
         self.stokes = stokes
 

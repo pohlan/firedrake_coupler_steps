@@ -6,7 +6,7 @@ target_directory='parameter_runs/'
 # determine the number of already started runs by counting the number of directories, than add 1 to get new run_index
 num_directories=$(find "$target_directory" -maxdepth 1 -mindepth 1 -type d -name "run_*" | wc -l)
 # run_index=$((num_directories+1))
-run_index=478
+run_index=706
 
 # make a new directory and copy this file so that the input parameters are recorded at the start of the simulation
 new_dir=$target_directory'run_'$run_index/
@@ -23,13 +23,13 @@ l_c=10
 beta2=3.7e5
 p=1.2
 q=1.0
-transition=false
+transition=true
 alpha_s=1.5
 beta_s=1.5
-omega=0.001
+omega=0.0005
 As_factor=6
 sig_topo=5
-melt_input='MAR_daily'
+melt_input=MAR_monthly
 m_basal=0.02
 moulins=false
 t_end=10
@@ -83,4 +83,6 @@ if [ "$beta2_inversion" = true ]; then
   # python -u step12b_inversion.py $options > parameter_runs/log_run_inversion_$run_index.txt
   # python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt
 fi
+# python -u step12b_inversion.py $options > parameter_runs/log_run_inversion_$run_index.txt
+
 python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt
