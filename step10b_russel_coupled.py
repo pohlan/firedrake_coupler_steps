@@ -21,6 +21,8 @@ params_output_file = args.results_directory+"parameter_runs.csv"
 
 # mesh
 mesh_file = data_dir+'russel/russel.msh'
+# mesh_file = data_dir+'russel/russel_smaller.msh'
+# mesh_file = data_dir+'russel/russel_Mank5.msh'
 mesh = df.Mesh(mesh_file)
 
 # time stepping
@@ -131,8 +133,8 @@ dt0= 2*hour
 
 if args.beta2_inversion:
     # get beta2 from inversion
-    chk_file = f"test_inversion/beta2_opt_1e-2.0_run543.h5"
-    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run313.h5"
+    chk_file = f"test_inversion/beta2_opt_1e-2.0_run543.h5" # reduced sheet flow
+    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run313.h5" # baseline
     # chk_file = f"test_inversion/beta2_opt_1e-2.0_run{args.run_index}.h5"
     with CheckpointFile(chk_file, 'r') as afile:
             mesh_ = afile.load_mesh()
@@ -202,7 +204,6 @@ else:
 hydro.build_forms(m, dt0=dt0, e_v=args.e_v, h_r=args.h_r, k_c=args.k_c, k_s=args.k_s, l_c=args.l_c, l_r=args.l_r, transition=args.transition, alpha_s=args.alpha_s, beta_s=args.beta_s, omega=args.omega, As_factor=args.As_factor, moulins=args.moulins)
 
 # initial melt input to moulins
-calc_m(0)
 DG0 = df.FunctionSpace(mesh_c, "DG", 0)
 m_DG0 = df.Function(DG0).interpolate(hydro.m)
 m_CG1 = df.Function(coupler.Q_cg)
@@ -260,7 +261,7 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
             break
         try:
             # interpolate spatially resolved surface runoff
-            m_CG1.dat.data[:] = calc_m(t) + args.m_basal
+            m_CG1.dat.data[:] = calc_m(t) #+ args.m_basal
             # m_in = calc_m(t)
             # m_in[np.where(zS>1400)] *= 0.5
             # m_in[np.where(zS>1500)] *= 0
@@ -274,8 +275,9 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 Qm, delta_moul = hlp.moulin_dirac_from_array(mesh, x_moulin, y_moulin, M_moulins)
                 hydro.Qm.interpolate(Qm)
                 hydro.m.interpolate(m_CG1*distributed_melt_mask)
+                hydro.m.dat.data[:] += args.m_basal
             else:
-                hydro.m.interpolate(m_CG1)
+                hydro.m.interpolate(m_CG1+args.m_basal)
 
             # Downs et al variable sheet conductivity
             # kmin = df.Constant(1e-3*s_per_day*365)
@@ -329,9 +331,9 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                 afile.save_function(df.project(hydro.N, coupler.Q_cg), idx=i, name="N")
                 if hydro.moulins:
                     afile.save_function(df.project(hydro.Qm, coupler.Q_cg), idx=i, name="Qm")
-                    afile.save_function(df.project(m_CG1*distributed_melt_mask,hydro.V_phi), idx=i, name="m")
+                    afile.save_function(hydro.m, idx=i, name="m")
                 else:
-                    afile.save_function(m_CG1, idx=i, name="m")
+                    afile.save_function(hydro.m, idx=i, name="m")
                 i += 1
 
         except df.exceptions.ConvergenceError:

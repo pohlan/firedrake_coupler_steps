@@ -62,8 +62,9 @@ for (k,crd) in enumerate(hydro_coords):
 # label
 physical_line = gmsh.model.addPhysicalGroup(1, np.array(lines)[i_bc_lines])
 non_bc_lines = np.delete(lines, i_bc_lines, axis=0)
-physical_line = gmsh.model.addPhysicalGroup(1, np.concatenate([non_bc_lines[-189:],non_bc_lines[0:68]])) # terminus: no-stress
-physical_line = gmsh.model.addPhysicalGroup(1, non_bc_lines[68:-189]) # lateral
+physical_line = gmsh.model.addPhysicalGroup(1, non_bc_lines)
+# physical_line = gmsh.model.addPhysicalGroup(1, np.concatenate([non_bc_lines[-189:],non_bc_lines[0:68]])) # terminus: no-stress
+# physical_line = gmsh.model.addPhysicalGroup(1, non_bc_lines[68:-189]) # lateral
 physical_surface = gmsh.model.addPhysicalGroup(2, [plane])
 
 

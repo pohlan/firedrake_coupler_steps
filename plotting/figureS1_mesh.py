@@ -10,7 +10,7 @@ import firedrake as df
 from firedrake.pyplot import tripcolor, triplot
 import fiona
 
-fontsize = 29
+fontsize = 37
 
 hydro_file = f"Greenland_data/russel/hydrological_outlets_russel.gpkg"
 hydro_points = fiona.open(hydro_file, mode="r")
@@ -42,7 +42,7 @@ ax2.set_ylim(-2.585e6,-2.47e6)
 # scale bar
 line_x = [-1.65e5,-1.55e5]
 line_y = [-2.583e6,-2.583e6]
-ax2.plot(line_x, line_y, color="black", lw=3)
+ax2.plot(line_x, line_y, color="black", lw=6)
 ax2.annotate("10 km", [line_x[0]-5e3,line_y[0]+5e3], c="black", fontsize=fontsize)
 # north arrow
 ax2.arrow(
@@ -50,7 +50,8 @@ ax2.arrow(
     0, 1.2e4,
     head_width=2500,
     head_length=3000,
-    color='black'
+    color='black',
+    lw=3
 )
 ax2.annotate("N", [line_x[0]+3.2e4,line_y[0]+5e3], c="black", fontsize=fontsize)
 
@@ -59,7 +60,7 @@ ax2.annotate("N", [line_x[0]+3.2e4,line_y[0]+5e3], c="black", fontsize=fontsize)
 # Inset box #
 #############
 
-inset_x0, inset_x1 = (-2.17e5,-2.01e5)
+inset_x0, inset_x1 = (-2.2e5,-2.01e5)
 inset_y0, inset_y1 = (-2.552e6,-2.538e6)
 inset_color = "slategrey"
 
@@ -96,8 +97,8 @@ axins.scatter(hydro_x,hydro_y, 60, color="red", zorder=2)
 ##################
 
 line_x = [inset_x0+1.5e3, inset_x0+3.5e3]
-line_y = [inset_y1-4e3, inset_y1-4e3]
-axins.plot(line_x, line_y, color="black", lw=2.5)
+line_y = [inset_y1-5e3, inset_y1-5e3]
+axins.plot(line_x, line_y, color="black", lw=4)
 axins.annotate("2 km", [line_x[0]-8e2,line_y[0]+1.1e3], c="black", fontsize=fontsize*0.75)
 
 
@@ -113,7 +114,7 @@ mark_inset(
     loc2=4,   # lower left corner of inset
     fc="none",
     ec=inset_color,
-    lw=1,
+    lw=3.5,
     ls="dashed"
 )
 
@@ -125,7 +126,7 @@ mark_inset(
 
 
 
-ax2.scatter(hydro_x,hydro_y, 60, color="red", zorder=2) #, edgecolors="white")
+ax2.scatter(hydro_x,hydro_y, 80, color="red", zorder=2) #, edgecolors="white")
 
 plt.tight_layout()
 plt.savefig("plotting/main_figures/fS01.jpg")

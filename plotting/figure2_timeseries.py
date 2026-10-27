@@ -13,7 +13,7 @@ flowlines_dir = "Greenland_data/profiles/"
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
 
 # whether to plot Fig. 2 in main document or same figure for different points as in supplements
-fig_mode = ["main","supp"][0]
+fig_mode = ["main","supp"][1]
 
 # profile width, which runs and glaciers to plot
 profile_width = 4.5e3
@@ -31,10 +31,10 @@ else:
     ds_upglacier = [10e3,30e3,10e3,30e3]
     glacier_names = ["Ørkendalen", "Ørkendalen", "Glacier 5", "Glacier 5"]
     title_bar_lengths = [2,2]
-    pw_lims = (-0.3,0.98)
-    y_Jan_annot = -0.25
-    speed_lims = (-60,130)
-    figname = "fS02"
+    pw_lims = (-1.2,1.2)
+    y_Jan_annot = 0.4
+    speed_lims = (-120,140)
+    figname = "fS05"
 
 n_glaciers = len(glacier_names)
 run_indices = [312,706]

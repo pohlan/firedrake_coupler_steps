@@ -14,14 +14,14 @@ import matplotlib.colors as colors
 
 xstart, xend = datetime(2020,4,1), datetime(2020,10,30)
 
-run_indices_maps = [314, 478]
-model_labels = ["Baseline", "Reduced sheet flow"]
+run_indices_maps = [312, 706]
+model_labels = ["Baseline", "Red. sheet flow"]
 
 # plotting parameters
 vmax = 305
 vmin = 50
-plt.rcParams['font.size'] = 23
-annotate_fs = 24
+plt.rcParams['font.size'] = 38
+annotate_fs = 38
 marker_size = 115
 cmap_speed = cmc.lapaz
 cmap_melt = cmc.lajolla
@@ -83,12 +83,25 @@ def plot_model_panel(U, ax, fig, gs, ii, iy, gdf, annotate_fs, vmin, vmax, cmap)
 
     if ii == 0:
         cax = fig.add_subplot(gs[1, 4])
-        fig.colorbar(cl, ax=cax, label="Surface speed " + r"($\mathrm{m\,a^{-1}}$)")
-        remove_axes(cax)
+        fig.colorbar(cl, cax=cax, label="Surface speed " + r"($\mathrm{m\,a^{-1}}$)")
+        pos = cax.get_position()
+        cax.set_position([
+            pos.x0 + 0.3 * pos.width,
+            pos.y0 + 0.4 * pos.height,
+            0.3*pos.width,
+            0.8*pos.height
+        ])
     elif vmin < 1:
         cax = fig.add_subplot(gs[2, 4])
-        fig.colorbar(cl, ax=cax, label="Melt input " + r"($\mathrm{m\,a^{-1}}$)")
-        remove_axes(cax)
+        cax.set_yscale("linear")
+        fig.colorbar(cl, cax=cax, label="Melt input " + r"($\mathrm{m\,a^{-1}}$)")
+        pos = cax.get_position()
+        cax.set_position([
+            pos.x0 + 0.3 * pos.width,
+            pos.y0 - 0.4 * pos.height,
+            0.3*pos.width,
+            0.8*pos.height
+        ])
 
     remove_axes(ax)
     panel_letter_annotation(ax, 4*iy+ii+1, annotate_fs)
@@ -119,13 +132,13 @@ def get_obs_speed(xstart,xend,dmonths=2):
 # observations
 x, y, Uobs, obs_dates = get_obs_speed(xstart,xend)
 
-fig = plt.figure(figsize=(30, len(Uobs)*4))
-gs  = fig.add_gridspec(len(Uobs), 6, left=0.07, right=0.99, top=0.97, bottom=0.01, hspace=0, width_ratios=[1,1,1,1,0.15,0.2])
+fig = plt.figure(figsize=(30, len(Uobs)*3.5))
+gs  = fig.add_gridspec(len(Uobs), 5, left=0.04, right=0.95, top=0.94, bottom=0.0, hspace=0, wspace=0.0, width_ratios=[1,1,1,1,0.2])
 
 for (iy,U) in enumerate(Uobs):
     ax = fig.add_subplot(gs[iy,0])
     month = obs_dates[iy].strftime("%b")
-    ax.annotate(f"{month}", xy=[-0.25,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
+    ax.annotate(f"{month}", xy=[-0.1,0.5], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
     im = ax.pcolormesh(x,np.flip(y), U, vmin=vmin, vmax=vmax, cmap=cmap_speed)
     remove_axes(ax)
     panel_letter_annotation(ax, 4*iy, annotate_fs)
@@ -150,4 +163,4 @@ for ii, (run_index, model_label) in enumerate(zip(run_indices_maps, model_labels
 
 
 
-plt.savefig(f"plotting/main_figures/fS01d.jpg")
+plt.savefig(f"plotting/main_figures/fS04.jpg")

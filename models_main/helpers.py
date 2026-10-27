@@ -296,7 +296,7 @@ def melt_fct_MAR_daily_files(hydro, H, meshx, meshy):
     time_MAR = [start_date + timedelta(days=k) for k in range(melt.shape[1])]
     for i in range(melt_smooth.shape[0]):
         ts = pd.Series(melt[i,:], index=time_MAR)
-        mm_smooth = ts.rolling(window='20D', center=True).mean().values
+        mm_smooth = ts.rolling(window='5D', center=True).mean().values
         melt_smooth[i,:] = mm_smooth
     def calc_m(t):
         yr = np.floor(t)

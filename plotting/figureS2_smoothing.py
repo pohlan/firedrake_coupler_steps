@@ -17,8 +17,8 @@ outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 
 # plotting parameters
 color_map = cmc.managua
-plt.rcParams['font.size'] = 22
-annotate_fs = 23
+plt.rcParams['font.size'] = 30
+annotate_fs = 30
 
 # load model stuff not run-specific
 timeseries_path = f"parameter_runs/run_478/time_series.h5"
@@ -109,4 +109,4 @@ panel_letter_annotation(ax1, 2, annotate_fs)
 panel_letter_annotation(ax2, 3, annotate_fs)
 
 
-plt.savefig(f"plotting/main_figures/fS01b.jpg")
+plt.savefig(f"plotting/main_figures/fS02.jpg")

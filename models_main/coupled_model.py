@@ -448,10 +448,13 @@ class GLADS(object):
             Uhat  = self.coupler.stokes.Uhat
             Nhat  = self.coupler.stokes.Nhat
             tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
-            # M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+            M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+            # Pa * m / yr * m^3/kg * kg/J
+            # = (N/m^2) * m^4 / yr / (N*m)      ; J = N*m
+            # = m / yr
         else:                                # prescribed if hydro only
             u_b = df.Constant(u_b)
-            # M_fr = self.M_fr = df.Constant(0)
+            M_fr = self.M_fr = df.Constant(0)
 
         # log-normal bump size
         # sigma_hr = 1
@@ -469,6 +472,7 @@ class GLADS(object):
 
         # weak form residuals
         R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
+        # R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m-M_fr) ) * df.dx(degree=3)
         R_phi_S = self.R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS(degree=3)
         R_h     = self.R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
         R_S     = self.R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS(degree=3) + S*w*df.ds(degree=3) # last term is to enforse S = 0 at boundary edges
