@@ -15,8 +15,9 @@ import cmcrameri.cm as cmc
 import matplotlib.colors as colors
 import fiona
 
-fig_mode = ["main", "supp"][0]
+fig_mode = ["main", "turb_vs_transition", "Re_omega", "three_catchments"][0]
 
+draw_Q = True
 if fig_mode == "main":
     run_indices = [312,706]
     model_labels  = ["Baseline", "Reduced\nsheet flow"]
@@ -24,6 +25,20 @@ if fig_mode == "main":
     outline_paths = ["Greenland_data/russel/russel_domain.gpkg",
                      "Greenland_data/russel/russel_domain.gpkg"]
     figname = "f03"
+elif fig_mode == "turb_vs_transition":
+    run_indices = [602,706]
+    model_labels  = ["Turbulent", "Reduced\nsheet flow"]
+    fig_height = 13
+    outline_paths = ["Greenland_data/russel/russel_domain.gpkg",
+                     "Greenland_data/russel/russel_domain.gpkg"]
+    figname = "fS12"
+elif fig_mode == "Re_omega":
+    run_indices = [706]
+    model_labels  = ["Reduced\nsheet flow"]
+    fig_height = 8
+    outline_paths = ["Greenland_data/russel/russel_domain.gpkg"]
+    figname = "fS13"
+    draw_Q = False
 else:
     run_indices = [706,711,712]
     model_labels  = ["Red. sheet\nflow", "Smaller\ndomain", "Larger\ndomain"]
@@ -31,7 +46,7 @@ else:
     outline_paths = ["Greenland_data/russel/russel_domain.gpkg",
                      "Greenland_data/russel/domain_smaller.gpkg",
                      "Greenland_data/russel/domain_Mankoff_k09_5glaciers.gpkg"]
-    figname = "fS18"
+    figname = "fS20"
 # run_indices = [479,478]
 # model_labels  = ["Smaller catchment", "Reduced \nsheet flow"]
 Q_min     = 15
@@ -143,27 +158,31 @@ for (i_r,(run_index,outline_path)) in enumerate(zip(run_indices,outline_paths)):
         q_vec_x = q_raw[::2, idx]
         q_vec_y = q_raw[1::2, idx]
         q = df.Function(V)
-        q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2) / (3600*24*365)
-        # q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2) / (3600*24*365) /1.787e-6 / 1000  # Re*omega
+        if fig_mode == "Re_omega":
+            q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2) / (3600*24*365) /1.787e-6 / 2000  # Re*omega
+            cl = tripcolor(q, axes=ax, cmap=cmc.vik, norm=colors.LogNorm(vmin=1/50, vmax=50))
+            clabel = r"Re $\omega$"
+        else:
+            q.dat.data[:] = np.sqrt(q_vec_x**2 + q_vec_y**2) / (3600*24*365)
+            cl = tripcolor(q, axes=ax, cmap=capped_map_q, norm=colors.LogNorm(vmin=1e-5, vmax=0.1))
+            clabel = r"$q\,(\mathrm{m^2 s^{-1}})$"
 
-        phi = df.Function(V)
-        phi.dat.data[:] = phi_raw[:,idx]
-        gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
-        keff = df.Function(V).interpolate(q / gradphi)
+        # phi = df.Function(V)
+        # phi.dat.data[:] = phi_raw[:,idx]
+        # gradphi = df.max_value(df.dot(df.grad(phi),df.grad(phi)),1e-15)**(1/2)
+        # keff = df.Function(V).interpolate(q / gradphi)
 
 
-        h = df.Function(V)
+        # h = df.Function(V)
         # h.dat.data[:] = h_raw[:,idx]
         # h.dat.data[:] = 910*9.81*H.dat.data[:] - (phi_raw[:,idx] - 1000*9.81*B.dat.data[:])
         # h.interpolate(q / )
 
-        cl = tripcolor(q, axes=ax, cmap=capped_map_q, norm=colors.LogNorm(vmin=1e-5, vmax=0.1))
-        # cl = tripcolor(q, axes=ax, cmap=capped_map_q, norm=colors.LogNorm(vmin=1e-2, vmax=1e2))
         # cl = tripcolor(h, axes=ax, cmap=cmc.lapaz, vmin=0, vmax=3e6) #, norm=colors.LogNorm(vmin=1e-3, vmax=3))
         # cl = tripcolor(keff, axes=ax, cmap=cmc.lapaz, norm=colors.LogNorm(vmin=1e-5, vmax=0.1))
         if (i_s == 0) & (i_r ==0):
             cax1 = fig.add_subplot(gs[0, 2])
-            cbar = fig.colorbar(cl, cax=cax1, label=r"$q\,(\mathrm{m^2 s^{-1}})$") # cax= ... not ax=... !
+            cbar = fig.colorbar(cl, cax=cax1, label=clabel) # cax= ... not ax=... !
 
             # manually define position and size of colorbar
             pos = cax1.get_position()
@@ -178,16 +197,15 @@ for (i_r,(run_index,outline_path)) in enumerate(zip(run_indices,outline_paths)):
         gdf = gpd.read_file(outline_path)
         gdf.plot(ax=ax, facecolor='none', edgecolor='black', linewidth=2, label='Domain')
 
-        # extract Q for the specified timestep
-        Q_vals = Q_raw[:, idx] / (3600*24*365)
-        Q_vals[np.where(Q_vals<Q_min)] = np.nan
-
-        cax2 = fig.add_subplot(gs[1, 2])
-        lc = get_Q_lines(Q_vals, ax, cax2, coords)
-        ax.add_collection(lc)
+        if draw_Q:
+            # extract Q for the specified timestep
+            Q_vals = Q_raw[:, idx] / (3600*24*365)
+            Q_vals[np.where(Q_vals<Q_min)] = np.nan
+            cax2 = fig.add_subplot(gs[1, 2])
+            lc = get_Q_lines(Q_vals, ax, cax2, coords)
+            ax.add_collection(lc)
 
         meshx, meshy = zip(*get_coordinates(mesh_, "CG", 1))
-        # Ly = np.max(meshy) - np.min(meshy)
         remove_axes(ax, ylims=(np.min(meshy),np.max(meshy)))
 
         # if i_r == 0:
@@ -198,10 +216,6 @@ for (i_r,(run_index,outline_path)) in enumerate(zip(run_indices,outline_paths)):
         if i_r == 0:
             ax.annotate(season, xy=[0.5,1.15], xycoords="axes fraction", annotation_clip=False, fontsize=annotate_fs, fontweight="bold", ha="center", va="center")
         ax.annotate(f"{idx_to_letter(i_r*2+i_s)}", xy=(0.03,1.05), xycoords="axes fraction", fontsize=annotate_fs*0.9, fontweight="bold")
-
-
-
-
 
 plt.tight_layout()
 plt.savefig(f"plotting/main_figures/{figname}.jpg")

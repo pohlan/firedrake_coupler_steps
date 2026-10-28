@@ -50,7 +50,7 @@ model_start_years = [2014,2014]
 
 model_lab_0 = {312: "Baseline", 602:"Turbulent", 710: "High-res.\nmelt input", 713: "With moulins", 715: "Frictional heat\ncomputed", 711: "Smaller\ndomain", 712: "Larger domain"}
 color_0     = {312: "coral"   , 602:"peru", 710: "peru", 713: "peru", 715: "peru", 711: "peru", 712: "indianred"}
-figname     = {312: figname_baseline, 602:"fS11", 710: "fS12", 713: "fS14", 715: "fS16", 711: "fS19", 712: "fS20"}
+figname     = {312: figname_baseline, 602:"fS11", 710: "fS14", 713: "fS16", 715: "fS18", 711: "fS21", 712: "fS22"}
 model_labels = [model_lab_0[run_indices[0]], "Reduced \nsheet flow"]
 colors = [color_0[run_indices[0]], "cornflowerblue"]
 

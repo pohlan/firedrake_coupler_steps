@@ -64,5 +64,5 @@ remove_axes(ax2, ylims=ylims)
 ax2.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.01), handlelength=1)
 ax2.annotate(f"{idx_to_letter(1)}", xy=(0.03, 0.95), xycoords="axes fraction", fontsize=annotate_fs*0.9, fontweight="bold", annotation_clip=False)
 
-plt.savefig("plotting/main_figures/fS17.jpg")
+plt.savefig("plotting/main_figures/fS19.jpg")
 

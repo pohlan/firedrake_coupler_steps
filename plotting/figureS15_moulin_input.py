@@ -102,4 +102,4 @@ ax.scatter(x_moulin,y_moulin,2)
 # panel label
 # ax.annotate("b", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="bold", annotation_clip=False)
 
-plt.savefig("plotting/main_figures/fS13.jpg")
+plt.savefig("plotting/main_figures/fS15.jpg")

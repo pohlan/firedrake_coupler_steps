@@ -29,11 +29,12 @@ elif fig_mode == "turbulent":  # turbulent flow regime
     xscale = "log"
 elif fig_mode == "p":          # sensitivity with p
     figname = "fS09"
-    run_indices_suit = range(551,557)
-    run_indices_timeseries = [551, 556, 706]
+    run_indices_suit = range(551,563)
+    run_indices_timeseries = [557, 562, 706]
     ylims_w=(-5,5.4)
     ylims_s=(-5,170)
     var = "p"
+    ks_label, ks_unit = "", ""
     xscale="linear"
 
 year0 = 2020
