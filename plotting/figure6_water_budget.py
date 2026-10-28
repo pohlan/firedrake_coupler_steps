@@ -93,6 +93,14 @@ ax4 = fig.add_subplot(gs[2,2])
 ax5 = fig.add_subplot(gs[4,0])
 ax6 = fig.add_subplot(gs[4,2])
 
+# supplementary figure
+fig_supp = plt.figure(figsize=(16, 9))
+gs_supp  = fig_supp.add_gridspec(3, 4, left=0.08, right=1.0, hspace=0.0, top=0.945, bottom=0.11, width_ratios=[1,0.08,1,0.56], height_ratios=[1,0.65,1])
+ax3_supp = fig_supp.add_subplot(gs_supp[0,0])
+ax4_supp = fig_supp.add_subplot(gs_supp[0,2])
+ax5_supp = fig_supp.add_subplot(gs_supp[2,0])
+ax6_supp = fig_supp.add_subplot(gs_supp[2,2])
+
 # inset for cross-section
 ax_inset = ax1.inset_axes([0.45, 0.49, 0.4, 0.5])
 gdf.plot(ax=ax_inset, facecolor="none", edgecolor="black", linewidth=1)
@@ -119,7 +127,7 @@ lax = fig.add_subplot(gs_top[0, 2])
 lax.plot([], [], color='grey', linestyle="solid", label="Total \n(sheets+channels)", lw=lw)
 lax.plot([], [], color='grey', linestyle="dashed", label=r"Channels", lw=lw)
 # lax.plot([], [], color='grey', linestyle="dashdot", label=r"Sheets", lw=lw)
-lax.legend(loc=(0.15,0.4), frameon=False, handlelength=1.4)
+lax.legend(loc=(0.13,0.4), frameon=False, handlelength=1.4)
 lax.axis("off")
 
 # legend different colors (different model runs)
@@ -137,10 +145,10 @@ labels_first = [labels[0]]
 handles_last = handles[1:]
 labels_last = labels[1:]
 # add first legend (no title)
-first_legend = lax.legend(handles_first, labels_first, title="Input", loc=(0.15,1.2), frameon=False, alignment="left", handlelength=1.4)
+first_legend = lax.legend(handles_first, labels_first, title="Input hashed area", loc=(0.13,1.2), frameon=False, alignment="left", handlelength=1.4)
 lax.add_artist(first_legend)
 # add second legend (with title for the last two)
-lax.legend(handles_last, labels_last, title="Outflow", loc=(0.15,0.25), frameon=False, alignment="left", handlelength=1.4)
+lax.legend(handles_last, labels_last, title="Outflow flux gate", loc=(0.13,0.25), frameon=False, alignment="left", handlelength=1.4)
 remove_axes(lax)
 
 V   = df.FunctionSpace(mesh_, "CG", 1)
@@ -167,11 +175,9 @@ upper.dat.data[i_upper] = 1
 # plt.savefig("B.jpg")
 
 
-def inputs_outputs_timeseries(run_index, xstart, xend):
-    timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
-    us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, S_raw, n_idx, _ = load_model_output(timeseries_path)
-
-    phi = df.Function(V)
+def inputs_outputs_timeseries(xstart, xend, m_raw, q_raw, h_raw, Q_raw, S_raw):
+    # timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
+    # us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, S_raw, n_idx, _ = load_model_output(timeseries_path)
 
     dates_model, i_model = get_model_dates(n_idx, xstart, xend)
     # extract q for the specified timestep
@@ -182,7 +188,6 @@ def inputs_outputs_timeseries(run_index, xstart, xend):
     Q_upper = np.zeros(len(i_model))
     Q_termini = np.zeros((len(i_model),len(hydro_coords)))
     ms    = np.zeros(len(i_model))
-    ms_IG = np.zeros(len(i_model))
     m_upper = np.zeros(len(i_model))
     sheet_volumes = np.zeros(len(i_model))
     channel_volumes = np.zeros(len(i_model))
@@ -223,22 +228,22 @@ def inputs_outputs_timeseries(run_index, xstart, xend):
         # total budget
         # budgets[i_time] = ms[i_time] - q_out[i_time] - Q_out[i_time]
 
-        phi.dat.data[:] = phi_raw[:,i_m]
-        idx_outflow =  get_outflow_index_2D_mesh(mesh_)
-        coords, cells, edges = mesh_vertex_graph(mesh_)
-        values = phi.dat.data_ro.copy()
-        filled, labels, parent = priority_flood_catchments(
-            values,
-            edges,
-            idx_outflow,
-        )
-        IG2 = df.Function(V)
-        IG2.dat.data[np.where(labels==1)] = 1
-        m_IG = df.assemble(m * IG2 * df.dx) # m^3 / yr, melt input over full domain
-        ms_IG[i_time] = m_IG
+        # phi.dat.data[:] = phi_raw[:,i_m]
+        # idx_outflow =  get_outflow_index_2D_mesh(mesh_)
+        # coords, cells, edges = mesh_vertex_graph(mesh_)
+        # values = phi.dat.data_ro.copy()
+        # filled, labels, parent = priority_flood_catchments(
+        #     values,
+        #     edges,
+        #     idx_outflow,
+        # )
+        # IG2 = df.Function(V)
+        # IG2.dat.data[np.where(labels==1)] = 1
+        # m_IG = df.assemble(m * IG2 * df.dx) # m^3 / yr, melt input over full domain
+        # ms_IG[i_time] = m_IG
 
 
-    return m_upper, q_upper, Q_upper, ms, q_out, Q_termini, ms_IG, dates_model, n_idx
+    return m_upper, q_upper, Q_upper, ms, q_out, Q_termini, dates_model, n_idx
 
 
 
@@ -246,7 +251,9 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
     print(run_index)
 
     # load timeseries of fluxes total and through fluxgate (upper)
-    m_upper, q_upper, Q_upper, ms, q_out, Q_termini, ms_IG, dates_model, n_idx = inputs_outputs_timeseries(run_index, xstart, xend)
+    timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
+    us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, S_raw, n_idx, _ = load_model_output(timeseries_path)
+    m_upper, q_upper, Q_upper, ms, q_out, Q_termini, dates_model, n_idx = inputs_outputs_timeseries(xstart, xend, m_raw, q_raw, h_raw, Q_raw, S_raw)
     qtot_out = np.sum(Q_termini,axis=1)+q_out
     Qout_IG = Q_termini[:,0]
     qtot_out_upper = Q_upper+q_upper
@@ -279,29 +286,13 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
     ax1.plot(dates_model, Q_upper*1e-9/365, label=model_label, color=col, lw=lw, ls="dashed", zorder=2)
     ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
-    ax1.set_ylabel("Flux gate\ndischarge "+ r"$(\mathrm{km^3\,d^{-1}})$")
+    ax1.set_ylabel("Discharge "+ r"$(\mathrm{km^3\,d^{-1}})$")
     y0_ax1, y1_ax1 = ax1.get_ylim()
     panel_letter_annotation(ax1, 0, annotate_fs, xyc=(0.03, 1.04))
     if i_r == 1:
         ax1.vlines(xend_winter, y0_ax1, y1_ax1*0.35, color="black", ls="-.")
         ax1.fill_betweenx([y0_ax1,y1_ax1*0.35], xstart_winter, xend_winter, facecolor="grey", alpha=0.15) # yellowgreen / darkseagreen
         ax1.set_ylim(y0_ax1,y1_ax1)
-
-    # if i_r == 0:
-    #     ax2.plot(dates_model, ms*1e-9/365, color="black", ls="dotted", label="Meltwater", lw=lw, zorder=1)
-    # ax2.plot(dates_model, qtot_out*1e-9/365, label=model_label, color=col, lw=lw, ls="dashed", zorder=2)
-    # ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-    # ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m'))
-    # ax2.set_ylabel("Discharge "+ r"$(\mathrm{km^3\,d^{-1}})$")
-    # y0_ax2, y1_ax2 = ax2.get_ylim()
-    # panel_letter_annotation(ax2, 0, annotate_fs, xyc=(0.03, 1.04))
-    # if i_r == 1:
-    #     ax2.fill_betweenx([y0_ax2,y1_ax2*0.35], xstart_winter, xend_winter, facecolor="cadetblue", alpha=0.1)
-    #     ax2.set_ylim(y0_ax2,y1_ax2)
-
-    # U_monthly = get_monthly_means_model(mesh_, run_index, xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]])
-    # dU = fit_linear_slope(U_monthly)
-    # print(f"dU: {dU}")
 
     if i_r == 1:
         model_label = "Reduced \nsheet flow"
@@ -321,8 +312,6 @@ for (i_r,(run_index,model_label,col)) in enumerate(zip(run_indices,model_labels,
         ax2.set_ylim(y0_ax2,0.4)
     panel_letter_annotation(ax2, 1, annotate_fs, xyc=(0.03, 1.04))
 
-
-# cols_sensitivity = ["yellowgreen","cornflowerblue"]
 cols_sensitivity = ["burlywood","teal"] # "" darkkhaki
 flow_labels      = ["Turbulent","Transitional"]
 alphas           = [1.0,1.0]
@@ -331,8 +320,10 @@ marker_types=["o", "o"]
 min_size, max_size = 40, 400  # min and max marker sizes
 m_min, m_max = 0.001, 0.1
 for (run_indices_suit, marker, col, alpha) in zip([run_indices_turbulent, run_indices_transition], marker_types, cols_sensitivity, alphas):
-    dUs_A = []
-    dUs_B = []
+    dUs_A_winter = []
+    dUs_B_winter = []
+    dUs_A_summer = []
+    dUs_B_summer = []
     # qtot_out_upper = []
     summer_net_storage = []
     m_basal = []
@@ -343,7 +334,9 @@ for (run_indices_suit, marker, col, alpha) in zip([run_indices_turbulent, run_in
         timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
         # load timeseries of fluxes total and through fluxgate (upper)
         try:
-            m_upper, q_upper, Q_upper, ms, q_out, Q_termini, _, dates_model, n_idx = inputs_outputs_timeseries(run_index, xstart, xend)
+            timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
+            us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, S_raw, n_idx, _ = load_model_output(timeseries_path)
+            m_upper, q_upper, Q_upper, ms, q_out, Q_termini, dates_model, n_idx = inputs_outputs_timeseries(xstart, xend, m_raw, q_raw, h_raw, Q_raw, S_raw)
             if len(dates_model)==0:
                 continue
         except:
@@ -353,13 +346,16 @@ for (run_indices_suit, marker, col, alpha) in zip([run_indices_turbulent, run_in
         float_params = hlp.get_params_from_input_file(run_index)
         m_basal.append(float_params["m_basal"])
         # get winter speedup in specific locations
-        # (technically loading everything again, could be improved...)
-        U_monthly = get_monthly_means_model(mesh_, run_index, xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]])
-        dU = fit_linear_slope(U_monthly)
-        dUs_A.append(dU)
-        U_monthly = get_monthly_means_model(mesh_, run_index, xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]])
-        dU = fit_linear_slope(U_monthly)
-        dUs_B.append(dU)
+        # point A
+        U_monthly_winter = get_monthly_means_from_raw(mesh_, us_raw, n_idx, xstart_winter, xend_winter, [[xcoords[0]]], [[ycoords[0]]])
+        dUs_A_winter.append(fit_linear_slope(U_monthly_winter))
+        U_monthly_summer = get_monthly_means_from_raw(mesh_, us_raw, n_idx, xstart_summer, xend_summer, [[xcoords[0]]], [[ycoords[0]]])
+        dUs_A_summer.append((np.max(U_monthly_summer) - np.mean(np.concatenate([U_monthly_summer,U_monthly_winter]))))
+        # point B
+        U_monthly_winter = get_monthly_means_from_raw(mesh_, us_raw, n_idx, xstart_winter, xend_winter, [[xcoords[1]]], [[ycoords[1]]])
+        dUs_B_winter.append(fit_linear_slope(U_monthly_winter))
+        U_monthly_summer = get_monthly_means_from_raw(mesh_, us_raw, n_idx, xstart_summer, xend_summer, [[xcoords[1]]], [[ycoords[1]]])
+        dUs_B_summer.append((np.max(U_monthly_summer) - np.mean(np.concatenate([U_monthly_summer,U_monthly_winter]))))
 
         # discharge
         i_winter = np.where([(d>xstart_winter) & (d<xend_winter) for d in dates_model])[0]
@@ -377,76 +373,57 @@ for (run_indices_suit, marker, col, alpha) in zip([run_indices_turbulent, run_in
     z_norm = (m_basal - m_min) / (m_max - m_min)
     sizes = min_size + z_norm * (max_size - min_size)
     # Point A, Q_end vs Delta u
-    im = ax3.scatter(np.array(Qs_channels)*1e-9/365, dUs_A, s=sizes, c=col, marker=marker, alpha=alpha)
-    # col instead of m_basal
+    ax3.scatter(np.array(Qs_channels)*1e-9/365, dUs_A_winter, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax3_supp.scatter(np.array(Qs_channels)*1e-9/365, dUs_A_summer, s=sizes, c=col, marker=marker, alpha=alpha)
+
     # Point B, Q_end vs Delta u
-    im = ax4.scatter(np.array(Qs_channels)*1e-9/365, dUs_B, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax4.scatter(np.array(Qs_channels)*1e-9/365, dUs_B_winter, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax4_supp.scatter(np.array(Qs_channels)*1e-9/365, dUs_B_summer, s=sizes, c=col, marker=marker, alpha=alpha)
 
     # Point A, budget vs Delta u
     # im = ax5.scatter(np.array(qtot_out_upper)*1e-9/365, dUs_A, markersz, col, marker=marker)
-    im = ax5.scatter(np.array(summer_net_storage), dUs_A, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax5.scatter(np.array(summer_net_storage), dUs_A_winter, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax5_supp.scatter(np.array(summer_net_storage), dUs_A_summer, s=sizes, c=col, marker=marker, alpha=alpha)
 
     # Point A, budget vs Delta u
     # im = ax6.scatter(np.array(qtot_out_upper)*1e-9/365, dUs_B, markersz, col, marker=marker)
-    im = ax6.scatter(np.array(summer_net_storage), dUs_B, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax6.scatter(np.array(summer_net_storage), dUs_B_winter, s=sizes, c=col, marker=marker, alpha=alpha)
+    ax6_supp.scatter(np.array(summer_net_storage), dUs_B_summer, s=sizes, c=col, marker=marker, alpha=alpha)
 
-    # # shared colorbar --> make it a legend! (and replace cmap with color list in scatter plots)
-    # cax = fig.add_subplot(gs[2,3])
-    # fig.colorbar(im, cax=cax, label=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
-    # # manually define position and size of colorbar
-    # pos = cax.get_position()
-    # cax.set_position([
-    #     pos.x0 + 0.1 * pos.width,
-    #     pos.y0 - 0.8 * pos.height,
-    #     0.07*pos.width,
-    #     pos.height
-    # ])
+# add labels and set lims
+ylabels = [r"$\Delta u_\mathrm{max}$ ($\mathrm{m\,a^{-1}}$)",
+           r"$\dot{u}_\mathrm{winter}$ ($\mathrm{m\,a^{-1}}$/month)"]
+xlabels = [r"$Q_\mathrm{\,Flux\,gate}$ ($\mathrm{km^3\,d^{-1}}$)",
+           r"Summer retention (%)"]
+titles  = ["Point A", "Point B"]
+for (i_param, (axes,ylab)) in enumerate(zip([[ax3_supp,ax4_supp,ax5_supp,ax6_supp],[ax3,ax4,ax5,ax6]],ylabels)):
+    for (i,ax) in enumerate(axes):
+        ax.set_ylabel(ylab)
+        panel_letter_annotation(ax, i+2*i_param, annotate_fs, xyc=(0.03, 1.04))  # i+2
+        ax.set_xlabel(xlabels[int(i >= 2)])
+        ax.set_xscale(['log','linear'][int(i >= 2)])
+        ax.set_title(["Point A", "Point B"][int(i%2)])
+    y0, y1 = axes[1].get_ylim()
+    axes[1].set_ylim(y0-0.05*(y1-y0), y1+0.05*(y1-y0))
+    axes[3].set_ylim(y0-0.05*(y1-y0), y1+0.05*(y1-y0))
 
+# legend
+for (gs_,fig_) in zip([gs, gs_supp],[fig,fig_supp]):
+    # legend with dummy plots, first for total vs channels
+    m_basal = np.array([0.001,0.02,0.05,0.1])
+    z_norm = (m_basal - m_min) / (m_max - m_min)
+    sizes = min_size + z_norm * (max_size - min_size)
+    lax = fig_.add_subplot(gs_[-3,3])
+    for (m,s) in zip(m_basal,sizes):
+        lax.scatter([], [], s=s, c="grey", marker="o", label=f"{m}")
+    lax.legend(loc=(-0.1,-0.1), frameon=False, title=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+    lax.axis("off")
+    # legend with dummy plots, first for total vs channels
+    lax = fig_.add_subplot(gs_[-1,3])
+    for (c,lab,alpha) in zip(cols_sensitivity,flow_labels,alphas):
+        lax.scatter([], [], s=np.mean(sizes), c=c, alpha=alpha, marker="o", label=lab)
+    lax.legend(loc=(-0.2,0.7), frameon=False, title="Sheet flow")
+    lax.axis("off")
 
-ax3.set_xlabel(r"$Q_\mathrm{\,Flux\,gate}$ ($\mathrm{km^3\,d^{-1}}$)")
-ax3.set_ylabel(r"$\dot{u}_\mathrm{winter}$ ($\mathrm{m\,a^{-1}}$/month)")
-panel_letter_annotation(ax3, 2, annotate_fs, xyc=(0.03, 1.04))
-ax3.set_xscale('log')
-ax3.set_title("Point A")
-
-ax4.set_xlabel(r"$Q_\mathrm{\,Flux\,gate}$ ($\mathrm{km^3\,d^{-1}}$)")
-ax4.set_ylabel(r"$\dot{u}_\mathrm{winter}$ ($\mathrm{m\,a^{-1}}$/month)")
-panel_letter_annotation(ax4, 3, annotate_fs, xyc=(0.03, 1.04))
-ax4.set_xscale('log')
-ax4.set_title("Point B")
-y0, y1 = ax4.get_ylim()
-ax4.set_ylim(y0, y1+0.3)
-
-ax5.set_xlabel(r"Summer retention (%)")
-ax5.set_ylabel(r"$\dot{u}_\mathrm{winter}$ ($\mathrm{m\,a^{-1}}$/month)")
-panel_letter_annotation(ax5, 4, annotate_fs, xyc=(0.03, 1.04))
-# ax5.set_xscale('log')
-ax5.set_title("Point A")
-
-ax6.set_xlabel(r"Summer retention (%)")
-ax6.set_ylabel(r"$\dot{u}_\mathrm{winter}$ ($\mathrm{m\,a^{-1}}$/month)")
-panel_letter_annotation(ax6, 5, annotate_fs, xyc=(0.03, 1.04))
-# ax6.set_xscale('log')
-ax6.set_title("Point B")
-ax6.set_ylim(y0, y1+0.3)
-
-# legend with dummy plots, first for total vs channels
-m_basal = np.array([0.001,0.02,0.05,0.1])
-z_norm = (m_basal - m_min) / (m_max - m_min)
-sizes = min_size + z_norm * (max_size - min_size)
-lax = fig.add_subplot(gs[2,3])
-for (m,s) in zip(m_basal,sizes):
-    lax.scatter([], [], s=s, c="grey", marker="o", label=f"{m}")
-lax.legend(loc=(-0.1,-0.1), frameon=False, title=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
-lax.axis("off")
-
-
-
-# legend with dummy plots, first for total vs channels
-lax = fig.add_subplot(gs[4,3])
-for (c,lab,alpha) in zip(cols_sensitivity,flow_labels,alphas):
-    lax.scatter([], [], s=np.mean(sizes), c=c, alpha=alpha, marker="o", label=lab)
-lax.legend(loc=(-0.2,0.7), frameon=False, title="Sheet flow")
-lax.axis("off")
-
-plt.savefig(f"plotting/main_figures/f06.jpg")
+fig.savefig(f"plotting/main_figures/f06.jpg")
+fig_supp.savefig(f"plotting/main_figures/fS10.jpg")

@@ -319,7 +319,7 @@ class GLADS(object):
         # self.h0   = df.Function(self.V_h)
         # self.S0   = df.Function(self.V_S)
 
-    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha_s=1.25, beta_s=1.5, As_factor=2, transition=False, omega=1/2000, u_b=30, Am=10, moulins=False):
+    def build_forms(self, m, e_v=1e-4, dt0=3600*2, k_s=0.05, k_c=0.5, h_r=0.5, l_r=5, l_c=10, alpha_s=1.25, beta_s=1.5, As_factor=2, transition=False, omega=1/2000, u_b=30, Am=10, moulins=False, friction_heat=False):
         s_per_year = df.Constant(60**2*24*365)
         # physical constants
         rho_i = df.Constant(self.coupler.rho_i)
@@ -448,13 +448,16 @@ class GLADS(object):
             Uhat  = self.coupler.stokes.Uhat
             Nhat  = self.coupler.stokes.Nhat
             tau_b = -beta2*(Max(N,1e4)/Nhat)**p*(u_b/Uhat)**(q-1)*u_b/Uhat
-            M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+            if friction_heat:
+                M_fr = self.M_fr = abs(tau_b*u_b)/(rho_i*L)
+            else:
+                M_fr = df.Constant(0)
             # Pa * m / yr * m^3/kg * kg/J
             # = (N/m^2) * m^4 / yr / (N*m)      ; J = N*m
             # = m / yr
         else:                                # prescribed if hydro only
             u_b = df.Constant(u_b)
-            M_fr = self.M_fr = df.Constant(0)
+            M_fr = df.Constant(0)
 
         # log-normal bump size
         # sigma_hr = 1
@@ -471,8 +474,8 @@ class GLADS(object):
         C_c = A_c*S*abs(N)**(n-1)*Max(N,1e4)
 
         # weak form residuals
-        R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
-        # R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m-M_fr) ) * df.dx(degree=3)
+        # R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m) ) * df.dx(degree=3)
+        R_phi_h = self.R_phi_h = (xsi*e_v/(rho_w*g)*(phi-phi0)/dt  - df.dot(df.grad(xsi),q_s) + xsi * (O-C-m-M_fr) ) * df.dx(degree=3)
         R_phi_S = self.R_phi_S = df.avg(-dxsids*Q + xsi * O_c*(1-rho_i/rho_w) - xsi * C_c) * df.dS(degree=3)
         R_h     = self.R_h     = ((h - h0)/dt - O + C) * psi * df.dx(degree=3)
         R_S     = self.R_S     = df.avg(((S-S0)/dt - O_c + C_c)*w) * df.dS(degree=3) + S*w*df.ds(degree=3) # last term is to enforse S = 0 at boundary edges
@@ -531,7 +534,7 @@ class GLADS(object):
         self.outfile_S.write(S_subDG0, time=t)
         Q_subDG0 = hlp.save_DGT0(self.mesh, self.Q_submesh, df.project(abs(self.Q),self.V_S), self.Q_save, self.outfile_Q, t)
         self.outfile_Q.write(Q_subDG0, time=t)
-        # self.outfile_M_fr.write(df.project(self.M_fr, self.V_phi, name="frictional_heat"), time=t)
+        self.outfile_M_fr.write(df.project(self.M_fr, self.V_phi, name="frictional_heat"), time=t)
         # self.outfile_M_fr.write(df.project(self.coupler.stokes.tau_b, self.V_phi, name="tau_bx"), time=t)
         if self.moulins:
             self.outfile_Qm.write(df.project(self.Qm, self.V_phi, name="Qm"), time=t)

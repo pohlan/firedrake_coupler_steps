@@ -424,6 +424,15 @@ def get_model_timeseries_for_locations(mesh_, run_index, xstart, xend, xc, yc, s
     U_model = load_model_timeseries(mesh_, us_raw, xc_input, yc_input, i_model)[:, 0]
     return dates_model, U_model
 
+def get_monthly_means_from_raw(mesh_, us_raw, n_idx, xstart, xend, xc, yc):
+    dates_model, i_model = get_model_dates(n_idx, xstart, xend, start_year=2014)
+    xc_input, yc_input = prepare_location_inputs(xc, yc)
+    U_model = load_model_timeseries(mesh_, us_raw, xc_input, yc_input, i_model)[:, 0]
+    dates_model_pd = pd.to_datetime(dates_model)
+    df_monthly = pd.DataFrame(U_model, index=dates_model_pd)
+    monthly_means = df_monthly.resample("MS").mean()
+    return monthly_means.to_numpy().ravel()
+
 def get_monthly_means_model(mesh_, run_index, xstart, xend, xc, yc, start_year=2014):
     dates_model, U_model = get_model_timeseries_for_locations(mesh_, run_index, xstart, xend, xc, yc, start_year=start_year)
     dates_model_pd = pd.to_datetime(dates_model)

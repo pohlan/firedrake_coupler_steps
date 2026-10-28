@@ -17,8 +17,8 @@ from matplotlib.colors import LogNorm
 
 # plotting parameters
 color_map = cmc.managua
-plt.rcParams['font.size'] = 20
-annotate_fs = 20
+plt.rcParams['font.size'] = 29
+annotate_fs = 29
 lw = 2.5
 clims = (20,300)
 
@@ -30,21 +30,21 @@ vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/month
 outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 catchments_file = "Greenland_data/Yang_Smith_2016/ds01/catchments_LC80070132013231LGN00_B8.shp"
 
-year = 2015
+year = 2020
 # xstart,xend = datetime(year-1,4,2), datetime(year,10,30)
-xstart_y1, xend_y1 = datetime(year-1,4,2), datetime(year-1,10,30)
+xstart, xend = datetime(year,4,2), datetime(year,10,30)
 
 # prepare figure, gridspecs
 # fig = plt.figure(figsize=(12,6))
 # gs = fig.add_gridspec(6, len(glacier_ids)+1, left=0.11, right=0.92, top=0.95, bottom=0.08, hspace=0.15, wspace=0.1, width_ratios=[15, 15, 15, 15, 15, 1], height_ratios=[1.5, 0.2, 1, 1, 1, 0.8])
-fig, ax = plt.subplots(figsize=(15,8))
-fig.subplots_adjust(left=0.0, right=0.95, bottom=0.05, top=0.98)
+fig, ax = plt.subplots(figsize=(15,6))
+fig.subplots_adjust(left=0.0, right=1.0, bottom=0.01, top=0.99)
 
 # topax2 = fig.add_subplot(gs[0, 3:6])
 # topax2 = fig.add_subplot(gs_top[0,2])
 
 # load model stuff not run-specific
-run_index = 489
+run_index = 713
 timeseries_path = f"parameter_runs/run_{run_index}/time_series.h5"
 mesh_, smesh_ = get_meshes(timeseries_path)
 # B, H, S = load_topography(mesh_)
@@ -53,19 +53,19 @@ df_moul, facet_functions, distributed_melt_mask = get_catchments_russel(mesh_)
 _, m_raw, _, _, _, _, _, n_idx, _ = load_model_output(timeseries_path)
 with h5py.File(timeseries_path, 'r') as h5file:
     Qm_raw = h5file['topologies/firedrake_default_topology/dms/firedrake_dm_1_0_0_False_1/vecs/Qm/Qm'][()].T
-dates_model, i_model = get_model_dates(n_idx, xstart_y1, xend_y1)
+dates_model, i_model = get_model_dates(n_idx, xstart, xend)
 V     = df.FunctionSpace(mesh_, "CG", 1)
 m     = df.Function(V)
 m_distributed   = df.Function(V)
 for (i_time, i_m) in enumerate(i_model):
-    m_distributed.dat.data[:] = m_raw[:,i_m]/365*2
+    m_distributed.dat.data[:] = (m_raw[:,i_m]-0.02)/365*2 # remove basal melt 0.02 m/yr
     m_distributed.interpolate(m_distributed*distributed_melt_mask)
     m.dat.data[:] += Qm_raw[:, i_m]/365*2 + m_distributed.dat.data[:]
 
 m.dat.data[m.dat.data_ro<1e-10] = np.nan
 im = tripcolor(m, axes=ax, norm=LogNorm(vmin=1e-3, vmax=30), cmap=cmc.batlowK) # cmap=inferno
-cbar = fig.colorbar(im, ax=ax)
-cbar.set_label("Meltwater input 2020 "+r"($\mathrm{m}$)")
+cbar = fig.colorbar(im, ax=ax, shrink=0.7)
+cbar.set_label(r"$m_\mathrm{surface}$" +r" ($\mathrm{m}$)" + "\nintegrated over 2020")
 
 # format
 ax.set_aspect('equal')
@@ -102,4 +102,4 @@ ax.scatter(x_moulin,y_moulin,2)
 # panel label
 # ax.annotate("b", [-2.4e5-2e4,-2.47e6+1e4], fontsize=annotate_fs, fontweight="bold", annotation_clip=False)
 
-plt.savefig("plotting/main_figures/fSX_moulins.jpg")
+plt.savefig("plotting/main_figures/fS13.jpg")

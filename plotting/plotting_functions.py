@@ -211,10 +211,6 @@ def plot_sensitivity_panel(ax_w, ax_s, mesh_, vel_dir, run_indices, var1, var2, 
 
         ax.scatter([param1[i_low]], [dUs[i_low]],   facecolors='none', edgecolors='lightsteelblue', label="", linewidths=4, s=marker_size_times*55)
         ax.scatter([param1[i_high]], [dUs[i_high]], facecolors='none', edgecolors='darkblue',       label="", linewidths=4, s=marker_size_times*55)
-        if (i == 1) & (scatter_annotate):
-            ax.annotate("Lowest " + r"$k_s$", xy=(param1[i_low]+5e-5, dUs[i_low]), fontsize=annotate_fs, annotation_clip=False, va="center")
-            ax.annotate("Highest\n"+ r"$k_s$", xy=(param1[i_high]-2e-5, dUs[i_high]+6), fontsize=annotate_fs, annotation_clip=False, ha="center")
-
 
         # set x and y limits
         if (i==0) & (ylims_w is not None):
@@ -224,19 +220,24 @@ def plot_sensitivity_panel(ax_w, ax_s, mesh_, vel_dir, run_indices, var1, var2, 
         ax.set_xscale(xscale)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
+
+        if (i == 1) & (scatter_annotate):
+            ax.annotate("Lowest " + param_labels[var1], xy=(param1[i_low]+2e-5, dUs[i_low]+0.1*(y1-y0)), fontsize=annotate_fs, annotation_clip=False, va="center")
+            ax.annotate("Highest\n"+ param_labels[var1], xy=(param1[i_high]-2e-5, dUs[i_high]+0.1*(y1-y0)), fontsize=annotate_fs, annotation_clip=False, ha="center")
+
         # for winter speedup, also plot observed rates
         if i == 0:
             ax.fill_between([x0,x1], slope-2*slope_err, slope+2*slope_err, alpha=0.1, color="black")
             ax.hlines(slope, x0, x1, color="black", ls="dashed", lw=lw)
             if legend==False:
-                x_shift = 0.65
-                xannotate = np.exp(np.log(x0) + x_shift*(np.log(x1)-np.log(x0)))
+                if xscale == "log":
+                    x_shift = 0.65
+                    xannotate = np.exp(np.log(x0) + x_shift*(np.log(x1)-np.log(x0)))
+                else:
+                    x_shift = 0.16
+                    xannotate = x0+x_shift*(x1-x0)
                 ax.annotate("Observed", xy=(xannotate, slope-2*slope_err-0.02*(y1-y0)), fontsize=annotate_fs, annotation_clip=False, va="top")
-            # else:
-                # x_shift = 0.16
-            # if xscale == "log":
-            # else:
-                # xannotate = x0+x_shift*(x1-x0)
+
         # legend
         if param_units[var1] == "":
             l1 = param_labels[var1]
@@ -256,7 +257,7 @@ def plot_sensitivity_panel(ax_w, ax_s, mesh_, vel_dir, run_indices, var1, var2, 
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
-def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, labels, xstart, xend, xstart_plot, xend_plot, xc, yc, cols, ii, param_units, param_labels,
+def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, labels, xstart, xend, xstart_plot, xend_plot, xc, yc, ii, param_units, param_labels,
                           lw_times=3.5, marker_size_times=8, annotate_fs=23, ylims=None, legend=True):
     files = glob.glob(vel_dir+"*vv*.tif")
     obs_dates, obs_files = get_obs_files(files, xrange=(xstart_plot, xend_plot))

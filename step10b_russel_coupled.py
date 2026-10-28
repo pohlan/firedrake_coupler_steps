@@ -135,6 +135,7 @@ if args.beta2_inversion:
     # get beta2 from inversion
     chk_file = f"test_inversion/beta2_opt_1e-2.0_run543.h5" # reduced sheet flow
     # chk_file = f"test_inversion/beta2_opt_1e-2.0_run313.h5" # baseline
+    # chk_file = f"test_inversion/beta2_opt_1e-2.0_run544.h5" # reduced sheet flow, Mank5 domain
     # chk_file = f"test_inversion/beta2_opt_1e-2.0_run{args.run_index}.h5"
     with CheckpointFile(chk_file, 'r') as afile:
             mesh_ = afile.load_mesh()
@@ -334,6 +335,8 @@ with df.CheckpointFile(f"{results_dir}/time_series.h5", 'w') as afile:
                     afile.save_function(hydro.m, idx=i, name="m")
                 else:
                     afile.save_function(hydro.m, idx=i, name="m")
+                if hasattr(hydro, 'M_fr'):
+                    afile.save_function(df.project(hydro.M_fr, coupler.Q_cg), idx=i, name="M_fr")
                 i += 1
 
         except df.exceptions.ConvergenceError:

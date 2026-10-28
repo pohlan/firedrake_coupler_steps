@@ -13,7 +13,7 @@ flowlines_dir = "Greenland_data/profiles/"
 vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/monthly/raw/"
 
 # whether to plot Fig. 2 in main document or same figure for different points as in supplements
-fig_mode = ["main","supp"][1]
+fig_mode = ["main","Orkendalen_Glacier5", "Isunnguata_Glacier5"][0]
 
 # profile width, which runs and glaciers to plot
 profile_width = 4.5e3
@@ -26,23 +26,44 @@ if fig_mode == "main":
     pw_lims = (-0.3,0.98)
     y_Jan_annot = -0.25
     speed_lims = (-60,130)
-    figname = "f02"
-else:
+    figname_baseline = "f02"
+elif fig_mode == "Orkendalen_Glacier5":
     ds_upglacier = [10e3,30e3,10e3,30e3]
     glacier_names = ["Ørkendalen", "Ørkendalen", "Glacier 5", "Glacier 5"]
     title_bar_lengths = [2,2]
     pw_lims = (-1.2,1.2)
     y_Jan_annot = 0.4
     speed_lims = (-120,140)
-    figname = "fS05"
+    figname_baseline = "fS05"
+elif fig_mode == "Isunnguata_Glacier5":
+    ds_upglacier = [10e3,35e3,10e3,30e3]
+    glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Glacier 5", "Glacier 5"]
+    title_bar_lengths = [2,2]
+    pw_lims = (-0.3,0.98)
+    y_Jan_annot = -0.25
+    speed_lims = (-60,150)
+    figname_baseline = ""
 
 n_glaciers = len(glacier_names)
 run_indices = [312,706]
-model_labels = ["Baseline", "Reduced \nsheet flow"]
 model_start_years = [2014,2014]
+
+model_lab_0 = {312: "Baseline", 602:"Turbulent", 710: "High-res.\nmelt input", 713: "With moulins", 715: "Frictional heat\ncomputed", 711: "Smaller\ndomain", 712: "Larger domain"}
+color_0     = {312: "coral"   , 602:"peru", 710: "peru", 713: "peru", 715: "peru", 711: "peru", 712: "indianred"}
+figname     = {312: figname_baseline, 602:"fS11", 710: "fS12", 713: "fS14", 715: "fS16", 711: "fS19", 712: "fS20"}
+model_labels = [model_lab_0[run_indices[0]], "Reduced \nsheet flow"]
+colors = [color_0[run_indices[0]], "cornflowerblue"]
+
+
 # model_labels = ["Larger domain", "Reduced \nsheet flow"]
 # model_labels = ["Reduced \nsheet flow", "With moulins"]
 # model_labels = ["Reduced \nsheet flow", r"Locally increased \n$k_s$"]
+
+# colors = ["peru","cornflowerblue"]        # smaller domain
+# colors = ["indianred","cornflowerblue"]   # larger domain
+# colors = ["cornflowerblue","yellowgreen"] # moulin run
+# colors = ["cornflowerblue","palevioletred"] # locally increased k_s
+
 
 # time period to plot
 xstart,xend = datetime(2019,1,2),datetime(2022,12,30)
@@ -69,11 +90,6 @@ obs_dates, obs_files = get_obs_files(files, xrange=(xstart,xend))
 Uobs_glaciers = load_obs_timeseries(obs_files, x_points, y_points)
 
 # plotting parameters
-colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
-# colors = ["peru","cornflowerblue"]        # smaller domain
-# colors = ["indianred","cornflowerblue"]   # larger domain
-# colors = ["cornflowerblue","yellowgreen"] # moulin run
-# colors = ["cornflowerblue","palevioletred"] # locally increased k_s
 plt.rcParams['axes.prop_cycle'] = plt.cycler(color=colors)
 plt.rcParams['font.size'] = 31
 lw = 4.5
@@ -184,5 +200,5 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
 #     ax.set_ylim(global_ymin, global_ymax)
 
 plt.tight_layout(pad=0.4)
-plt.savefig(f"plotting/main_figures/{figname}.jpg")
+plt.savefig(f"plotting/main_figures/{figname[run_indices[0]]}.jpg")
 # plt.savefig(f"plotting/main_figures/{figname}_{run_indices[0]}_{run_indices[1]}.jpg")
