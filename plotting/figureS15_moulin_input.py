@@ -65,7 +65,7 @@ for (i_time, i_m) in enumerate(i_model):
 m.dat.data[m.dat.data_ro<1e-10] = np.nan
 im = tripcolor(m, axes=ax, norm=LogNorm(vmin=1e-3, vmax=30), cmap=cmc.batlowK) # cmap=inferno
 cbar = fig.colorbar(im, ax=ax, shrink=0.7)
-cbar.set_label(r"$m_\mathrm{surface}$" +r" ($\mathrm{m}$)" + "\nintegrated over 2020")
+cbar.set_label(r"$\dot{m}_\mathrm{surface}$" +r" ($\mathrm{m}$)" + "\nintegrated over 2020")
 
 # format
 ax.set_aspect('equal')

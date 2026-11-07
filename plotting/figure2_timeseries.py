@@ -19,15 +19,15 @@ fig_mode = ["main","Orkendalen_Glacier5", "Isunnguata_Glacier5"][0]
 profile_width = 4.5e3
 deltas_upglacier = [500,500,500,500]
 wspace_size = 0.05
-if fig_mode == "main":
+if fig_mode == "main":                    # for 312, 602, 710, 713, 715
     ds_upglacier = [10e3,35e3,10e3,16e3]
-    glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russel", "Isorlersuup"]
+    glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Russell", "Isorlersuup"]
     title_bar_lengths = [2,1,1]
     pw_lims = (-0.3,0.98)
     y_Jan_annot = -0.25
     speed_lims = (-60,130)
     figname_baseline = "f02"
-elif fig_mode == "Orkendalen_Glacier5":
+elif fig_mode == "Orkendalen_Glacier5":   # for 312
     ds_upglacier = [10e3,30e3,10e3,30e3]
     glacier_names = ["Ørkendalen", "Ørkendalen", "Glacier 5", "Glacier 5"]
     title_bar_lengths = [2,2]
@@ -35,7 +35,7 @@ elif fig_mode == "Orkendalen_Glacier5":
     y_Jan_annot = 0.4
     speed_lims = (-120,140)
     figname_baseline = "fS05"
-elif fig_mode == "Isunnguata_Glacier5":
+elif fig_mode == "Isunnguata_Glacier5":   # for 711 and 712
     ds_upglacier = [10e3,35e3,10e3,30e3]
     glacier_names = ["Isunnguata Sermia", "Isunnguata Sermia", "Glacier 5", "Glacier 5"]
     title_bar_lengths = [2,2]
@@ -151,7 +151,7 @@ for (run_index,color,model_label,model_start) in zip(run_indices, colors, model_
         # df_PwPi = pd.DataFrame(Pw_Pi, index=dates_model_pd)
         # Pw_Pi_resampled = df_PwPi.resample('10D').mean()
         ax2.plot(dates_model, Pw_Pi, label=model_label, lw=lw, color=color)
-        format_ax(ax2, xstart, xend, colmn, panel_idx=(row0+1)*2+colmn, ylims=pw_lims, ylabel=r"$p_w / p_i$" if colmn == 0 else "", fontsize=annotate_fs*0.9, y_panellabel=6/7)
+        format_ax(ax2, xstart, xend, colmn, panel_idx=(row0+1)*2+colmn, ylims=pw_lims, ylabel=r"$p_\mathrm{w} / p_\mathrm{i}$" if colmn == 0 else "", fontsize=annotate_fs*0.9, y_panellabel=6/7)
         ax2.set_xlabel("")
         ax2.set_xticks([])
         # legend outside of plots, in separate axis

@@ -29,7 +29,7 @@ outline_path   = "Greenland_data/russel/russel_domain.gpkg"
 profile_width = 1e3
 delta = 1.5e3   # interval
 profile_stop = 40e3
-glacier_names = ["Isunnguata Sermia", "Russel", "Ørkendalen", "Isorlersuup", "Glacier 5"]
+glacier_names = ["Isunnguata Sermia", "Russell", "Ørkendalen", "Isorlersuup", "Glacier 5"]
 ds_upglacier = np.arange(start=delta/2, stop=profile_stop,step=delta)
 
 # time period
@@ -45,6 +45,8 @@ plt.rcParams['font.size'] = 56
 annotate_fs = 56
 lw = 5
 clims = (20,300)
+col_vlines = 'limegreen'
+lw_vlines = 5
 
 # load model stuff not run-specific
 timeseries_path = f"parameter_runs/run_{run_index1}/time_series.h5"
@@ -129,8 +131,8 @@ colors = ["coral","cornflowerblue","yellowgreen","palevioletred"]
 
 annotate_offsets = [[-1.05e5,+0.5e4],[-4.8e4,-2e3],[-7.1e4,-1.2e4],[-6.5e4,-1.3e4],[-5.3e4,-1.6e4]]
 
-gl_names = ["Isunnguata-Sermia","Russel","Ørkendalen","Isorlersuup","Glacier-5"]
-gl_annotations = ["Isunnguata Sermia","Russel","Ørkendalen","Isorlersuup","Glacier 5"]
+gl_names = ["Isunnguata-Sermia","Russell","Ørkendalen","Isorlersuup","Glacier-5"]
+gl_annotations = ["Isunnguata Sermia","Russell","Ørkendalen","Isorlersuup","Glacier 5"]
 for (gl,strng,gl_name,offset_crd,d_timeseries) in zip(gls, gl_annotations, gl_names, annotate_offsets, ds_timeseries):
     col = "black"
     fl = [0,4,1,2,3][gl-1]
@@ -258,7 +260,6 @@ axins2.set_zorder(5)
 
 
 for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vline)):
-# for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,[glacier_names[0]],ds_vline)):
     fl = [0,4,1,2,3][gl-1]  # flow linestrings don't have the same numbering as gl; also gl starts at 1
 
     print(gl_name)
@@ -300,7 +301,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         # make the corresponding date the middle of the month rather than the beginnning, to be consistent with observations
         monthly_means.index = (monthly_means.index + (monthly_means.index + pd.offsets.MonthEnd(0) - monthly_means.index) / 2)
         # plot
-        axi = fig.add_subplot(gs[i_run+1, ig+1])
+        axi = fig.add_subplot(gs[i_run+2, ig+1])
         im1 = axi.pcolormesh(
             ds_upglacier * 1e-3,
             monthly_means.index,
@@ -316,7 +317,7 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         # )
 
         if len(d_vline) > 0:
-            axi.vlines(x=d_vline*1e-3, ymin=axi.get_ylim()[0], ymax=axi.get_ylim()[1], color='cyan', linestyle='-', lw=3)
+            axi.vlines(x=d_vline*1e-3, ymin=axi.get_ylim()[0], ymax=axi.get_ylim()[1], color=col_vlines, linestyle='-', lw=lw_vlines)
 
 
         axi.tick_params(axis='x', labelbottom=False, length=4)  # remove x-axis labels
@@ -330,14 +331,13 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
         axi.set_xlim(0,np.max(ds_upglacier)*1e-3)
         axi.yaxis.set_major_locator(mdates.MonthLocator(interval=3))
         axi.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
-        axi.annotate(f"{idx_to_letter(i_run*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
-
+        axi.annotate(f"{idx_to_letter((i_run+1)*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     ##########################
     # Panel: Observations -- #
     ##########################
 
-    ax3 = fig.add_subplot(gs[3, ig+1])
+    ax3 = fig.add_subplot(gs[1, ig+1])
 
     # load velocity observations
     files   = glob.glob(vel_dir+"*vv*.tif")
@@ -377,10 +377,10 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     xl = ax3.get_xlim()
     ax3.yaxis.set_major_locator(mdates.MonthLocator(interval=3))
     ax3.yaxis.set_major_formatter(mdates.DateFormatter('%m'))
-    ax3.annotate(f"{idx_to_letter(2*len(glacier_ids)+ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
+    ax3.annotate(f"{idx_to_letter(ig+2)}", xy=(0.03,0.9), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
-            ax3.vlines(x=d_vline*1e-3, ymin=ax3.get_ylim()[0], ymax=ax3.get_ylim()[1], color='cyan', linestyle='-', lw=3)
+            ax3.vlines(x=d_vline*1e-3, ymin=ax3.get_ylim()[0], ymax=ax3.get_ylim()[1], color=col_vlines, linestyle='-', lw=lw_vlines)
 
 
 
@@ -424,7 +424,10 @@ for (ig,(gl,gl_name,d_vline)) in enumerate(zip(glacier_ids,glacier_names,ds_vlin
     ax4.annotate(f"{idx_to_letter(3*len(glacier_ids)+ig+2)}", xy=(0.05,6/7), xycoords="axes fraction", fontsize=annotate_fs*0.8, fontweight="bold")
 
     if len(d_vline) > 0:
-            ax4.vlines(x=d_vline*1e-3, ymin=ax4.get_ylim()[0], ymax=ax4.get_ylim()[1], color='cyan', linestyle='-', lw=3)
+        # for d in d_vline:
+        #     print(gl_name)
+        #     print(f"d={d}, h= {S_profile[np.argmin(np.abs(d-ss_topo))]}")
+        ax4.vlines(x=d_vline*1e-3, ymin=ax4.get_ylim()[0], ymax=ax4.get_ylim()[1], color=col_vlines, linestyle='-', lw=lw_vlines)
 
 
 # plt.savefig(f"plotting/output_heatmap/hovmuller_runs_{run_index1}_{run_index2}_{year}.jpg")

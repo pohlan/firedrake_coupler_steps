@@ -60,7 +60,7 @@ for (i_s,season) in enumerate(["July 2020", "January 2021"]):
     cl = tripcolor(M_fr, axes=ax, cmap=cmc.lajolla, norm=LogNorm(vmin=5e-3, vmax=0.1))
     if (i_s == 0):
         cax1 = fig.add_subplot(gs[0, 2])
-        cbar = fig.colorbar(cl, cax=cax1, label=r"$m_\mathrm{friction}\,(\mathrm{m\,a^{-1}})$")
+        cbar = fig.colorbar(cl, cax=cax1, label=r"$\dot{m}_\mathrm{friction}\,(\mathrm{m\,a^{-1}})$")
 
         # manually define position and size of colorbar
         pos = cax1.get_position()

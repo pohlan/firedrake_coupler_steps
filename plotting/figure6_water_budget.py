@@ -416,7 +416,7 @@ for (gs_,fig_) in zip([gs, gs_supp],[fig,fig_supp]):
     lax = fig_.add_subplot(gs_[-3,3])
     for (m,s) in zip(m_basal,sizes):
         lax.scatter([], [], s=s, c="grey", marker="o", label=f"{m}")
-    lax.legend(loc=(-0.1,-0.1), frameon=False, title=r"$m_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
+    lax.legend(loc=(-0.1,-0.1), frameon=False, title=r"$\dot{m}_\mathrm{basal}$ ($\mathrm{m\,a^{-1}}$)")
     lax.axis("off")
     # legend with dummy plots, first for total vs channels
     lax = fig_.add_subplot(gs_[-1,3])

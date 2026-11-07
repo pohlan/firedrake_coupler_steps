@@ -150,7 +150,7 @@ for (i_r,(run_index,outline_path)) in enumerate(zip(run_indices,outline_paths)):
     coords = smesh_.coordinates.dat.data  # mesh coordinates
     us_raw, m_raw, phi_raw, h_raw, q_raw, Q_raw, _, n_idx, _ = load_model_output(timeseries_path)
     for (i_s,season) in enumerate(["July 2020", "January 2021"]):
-        idx = {'January 2021': int(7.05*365/2), 'July 2020': int(6.53*365/2)}[season]
+        idx = {'January 2021': int(7.041*365/2), 'July 2020': int(6.54*365/2)}[season]
         ax = fig.add_subplot(gs[i_r,i_s])
 
         # extract q for the specified timestep

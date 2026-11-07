@@ -285,13 +285,23 @@ def plot_timeseries_panel(ax, mesh_, vel_dir, run_indices, labels, xstart, xend,
         y0, y1 = ax.get_ylim()
     ax.fill_betweenx([y0, y1], xstart, xend, alpha=0.15, facecolor="grey")
     if legend==False:
-        ax.annotate("Winter period", xy=[0.7, 0.7], xycoords="axes fraction", color="black", fontsize=annotate_fs*0.85, fontweight="bold", ha="center")
+        ax.annotate("Winter period", xy=[0.688, 0.7], xycoords="axes fraction", color="black", fontsize=annotate_fs*0.85, fontweight="bold", ha="center")
 
 
     ax.set_xlabel("Month of 2020/2021")
     ax.set_ylabel(r"$\Delta u$ ($\mathrm{m\,a^{-1}}$)")
     if legend:
-        ax.legend(handlelength=1.2, fontsize=annotate_fs*0.9, loc=(0.4,0.42), frameon=False)
+        handles, labels = ax.get_legend_handles_labels()
+        # split into two legends
+        handles_first = handles[0:3]
+        labels_first = labels[0:3]
+        handles_last = [handles[-1]]
+        labels_last = [labels[-1]]
+        # add first legend
+        first_legend = ax.legend(handles_first, labels_first, loc=(0.42,0.42), fontsize=annotate_fs*0.9, frameon=False, alignment="left", handlelength=1)
+        ax.add_artist(first_legend)
+        # add second legend
+        ax.legend(handles_last, labels_last, loc=(0.42,0.02), fontsize=annotate_fs*0.9, frameon=False, alignment="left", handlelength=1)
     if ylims is not None:
         ax.set_ylim(ylims)
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))

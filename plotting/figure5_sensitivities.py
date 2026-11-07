@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from plotting.loading_functions import *
 from plotting.plotting_functions import *
 import matplotlib.pyplot as plt
+import cmcrameri.cm as cmc
 
 fig_mode = ["main", "turbulent", "p"][0]
 if fig_mode == "main":  # transitional flow regime
@@ -14,7 +15,7 @@ if fig_mode == "main":  # transitional flow regime
     ylims_w=(-5,5.4)
     ylims_s=(15,68)
     var = "k_s"
-    ks_label = r"$k_s$"
+    ks_label = r"$k_\mathrm{s}$"
     ks_unit  = r"$\mathrm{m\,s\,kg^{-1}}$"
     xscale="log"
 elif fig_mode == "turbulent":  # turbulent flow regime
@@ -24,7 +25,7 @@ elif fig_mode == "turbulent":  # turbulent flow regime
     ylims_w=None
     ylims_s=None
     var = "k_s"
-    ks_label = r"$\tilde{k}_s$"
+    ks_label = r"$\tilde{k}_\mathrm{s}$"
     ks_unit  = r"$\mathrm{m^{\frac{7}{4}}\,kg^{-\frac{1}{2}}}$"
     xscale = "log"
 elif fig_mode == "p":          # sensitivity with p
@@ -48,7 +49,7 @@ vel_dir = "/home/annegret/Projects/coupled_modeling/GrisVels/data/MEaSUREs/month
 timeseries_path = f"parameter_runs/run_{run_indices_suit[0]}/time_series.h5"
 mesh_, smesh_ = get_meshes(timeseries_path)
 
-param_labels = {"k_s": ks_label, "h_r": r"$h_r$", "m_basal": r"$m_\mathrm{basal}$", "p":r"$p$"}
+param_labels = {"k_s": ks_label, "h_r": r"$h_\mathrm{r}$", "m_basal": r"$\dot{m}_\mathrm{basal}$", "p":r"$p$"}
 param_units  = {"k_s": ks_unit, "h_r": r"$\mathrm{m}$", "m_basal": r"$\mathrm{m\,a^{-1}}$", "p":""}
 
 #####################
@@ -57,7 +58,7 @@ param_units  = {"k_s": ks_unit, "h_r": r"$\mathrm{m}$", "m_basal": r"$\mathrm{m\
 
 annotate_fs = 35
 plt.rcParams['font.size'] = 35
-colors = plt.cm.berlin(np.linspace(0.1, 0.9, 5))
+colors = cmc.batlowK(np.linspace(0.1, 0.9, 5))
 
 fig = plt.figure(figsize=(22, 18))
 gs = fig.add_gridspec(6, 2, top=0.99, bottom=0.06, left=0.16, right=0.97, hspace=0.4, wspace=0.4, width_ratios=[1,1], height_ratios=[0.18,1,0.2,1,0.2,1])
@@ -71,14 +72,14 @@ topax = fig.add_subplot(gs[0, 0])
 topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
 topax.set_xlim(0,1)
 topax.axis("off")
-topax.annotate("A", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
+topax.annotate("Point A", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
 
 
 topax = fig.add_subplot(gs[0, 1])
 topax.fill_between([0,1],0,1, color="grey", alpha=0.1)
 topax.set_xlim(0,1)
 topax.axis("off")
-topax.annotate("B", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
+topax.annotate("Point B", xy=[0.5,0.4], fontsize=annotate_fs*1.2, fontweight="bold", ha="center", va="center")
 
 
 #####################

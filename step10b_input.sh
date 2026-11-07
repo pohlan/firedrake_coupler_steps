@@ -85,4 +85,4 @@ if [ "$beta2_inversion" = true ]; then
 fi
 # python -u step12b_inversion.py $options > parameter_runs/log_run_inversion_$run_index.txt
 
-python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt
+nohup python -u step10b_russel_coupled.py $options > parameter_runs/log_run_$run_index.txt &
